@@ -1,0 +1,72 @@
+后续注意事项
+
+一、Doubao 技术选型切换
+
+1. 文本大模型
+   - 正式技术选型：Doubao-Seed-2.0-lite
+   - 接口方式：火山方舟 OpenAI-compatible Chat Completions
+   - 配置项：
+     LLM_PROVIDER=doubao
+     DOUBAO_API_KEY=你的火山方舟 API Key
+     DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+     DOUBAO_MODEL=doubao-seed-2-0-lite-260215
+
+2. 文本/图片 Embedding
+   - 正式技术选型：Doubao-embedding-vision
+   - 接口文件：backend/app/embeddings/doubao_embedding_vision.py
+   - 配置项：
+     EMBEDDING_PROVIDER=doubao
+     TEXT_EMBEDDING_PROVIDER=doubao
+     IMAGE_EMBEDDING_PROVIDER=doubao
+     DOUBAO_EMBEDDING_API_KEY=你的火山方舟或向量服务 Key
+     DOUBAO_EMBEDDING_MODEL=doubao-embedding-vision-250615
+     DOUBAO_EMBEDDING_DIMENSION=2048
+     DOUBAO_EMBEDDING_ENABLE_REAL=true
+
+3. 图片输入提醒
+   - Doubao 多模态向量接口更适合公网图片 URL 或 TOS 地址。
+   - 当前本地商品图和上传图如果不能被云端访问，真实 Doubao 图像向量可能无法直接处理。
+   - 后续应补对象存储/TOS 或公网静态图片地址，再把图搜完全切到真实 Doubao。
+
+4. 本地模型清理提醒
+   - 之前下载的 bge-m3 / Chinese-CLIP 权重集中在：C:\Users\zzcy2\Desktop\agent\models
+   - Doubao 切换稳定后，可以删除这个 models 目录来释放空间。
+   - 删除后如果想回退本地模型，需要重新下载并重建索引。
+
+二、Android 展示端运行提醒
+
+当前环境已检测到 Java 17，但 Android 真机/模拟器运行还需要：
+1. Android Studio
+2. Android SDK
+3. Gradle / Android Gradle Plugin
+4. 模拟器或真机调试环境
+
+后续做 Android 展示端时，优先补齐：
+1. 会话列表页
+2. 聊天页
+3. SSE 流式展示
+4. 商品卡片
+5. 图片上传
+6. 点赞/点踩
+7. 商品详情页
+
+三、索引重建提醒
+
+切换 Embedding 模型或向量维度后，必须重建 Chroma 索引，否则会出现维度冲突。
+
+执行位置：
+C:\Users\zzcy2\Desktop\agent\commerce-rag-agent\backend
+
+执行命令：
+python -m app.scripts.rebuild_indexes
+
+四、路演界面后续单独制作
+
+当前 Web Debug 前端用于开发调试和能力验证。
+路演界面不要和 Debug Console 混在一起，后续单独做 Demo Showcase 页面，定位为项目路演的正式产品展示界面。
+
+路演界面要求：
+1. 不显示 trace、intent、filters、retrieved ids、raw SSE 等调试信息。
+2. 重点展示类似豆包聊天体验、图片上传、商品卡片、推荐理由和反馈。
+3. 视觉上更像正式 AI 导购产品，而不是开发后台。
+4. 可以和 Web Debug 共用 API client、SSE parser、商品卡片数据结构和上传/反馈接口。

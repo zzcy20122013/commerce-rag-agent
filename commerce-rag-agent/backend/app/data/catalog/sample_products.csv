@@ -1,0 +1,5 @@
+id,title,category,brand,price,description,specs_json,rating,sales,stock,tags,audience,use_cases,selling_points,image_file
+p101,荣耀平板 X9 学习版,平板,荣耀,1599,轻薄护眼屏，适合网课和记笔记。,"{""weight_g"":495,""screen"":""11.5 inch""}",4.7,3821,128,性价比;护眼,学生,记笔记;网课,轻薄;续航稳定,
+p102,Redmi Buds 6 降噪耳机,耳机,Redmi,199,主动降噪，适合通勤和网课。,"{""noise_canceling"":true}",4.6,15032,360,性价比;降噪,学生;上班族,通勤;网课,主动降噪;佩戴轻,
+p103,安踏轻便通勤跑鞋,鞋,安踏,269,脚感柔软，通勤和轻运动都适合。,"{""style"":""commute""}",4.6,8720,210,通勤;轻便,上班族,通勤;久走,软底;轻便,
+p104,小米城市双肩包 2,背包,小米,149,通勤简洁，能放 14 英寸电脑。,"{""capacity_l"":18}",4.5,10021,300,通勤;电脑包,学生;上班族,上课;通勤,多隔层;轻量,

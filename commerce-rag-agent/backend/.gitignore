@@ -1,0 +1,13 @@
+.venv/
+.env
+__pycache__/
+.pytest_cache/
+*.pyc
+app/data/chroma/
+app/data/uploads/
+app/data/imports/*
+!app/data/imports/.gitkeep
+app/data/*.db
+app/data/*.sqlite
+app/data/*.sqlite3
+*.log

@@ -1,0 +1,4 @@
+case_id,query,expected_product_ids,expected_doc_ids
+text_001,"适合学生记笔记的平板","p001|p002|p004",
+text_002,"退货政策是什么",,faq_return_policy
+text_003,"通勤耳机","p006|p007",

@@ -1,0 +1,5 @@
+product_id,category,title,image_file,source,note
+p101,平板,荣耀平板 X9 学习版,images/tablets/tablet_001.jpg,local,示例：平板主图
+p102,耳机,Redmi Buds 6 降噪耳机,images/headphones/headphone_001.jpg,local,示例：耳机主图
+p103,鞋,安踏轻便通勤跑鞋,images/shoes/shoes_001.jpg,local,示例：鞋子主图
+p104,背包,小米城市双肩包 2,images/backpacks/backpack_001.jpg,local,示例：背包主图

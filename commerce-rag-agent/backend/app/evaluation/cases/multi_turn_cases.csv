@@ -1,0 +1,3 @@
+case_id,turn_1,turn_2,expected_memory,expected_behavior
+mt001,"我想买一台学生党平板，预算 2000，记笔记和网课","有没有更轻一点的？","budget_max=2000;category=平板;use_cases=记笔记|网课;preferences=轻便","推荐仍为平板，价格不超过 2000，并优先解释轻便性"
+mt002,"帮我找 300 以内适合通勤的鞋","有没有更舒适一点的？","budget_max=300;category=鞋;use_cases=通勤","推荐仍为鞋，价格不超过 300"

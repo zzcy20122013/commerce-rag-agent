@@ -1,0 +1,17 @@
+id,title,category,brand,price,description,specs_json,rating,sales,stock,tags,audience,use_cases,selling_points,image_file
+p201,轻薄手写学习平板,平板,HonorLab,1699,轻薄机身搭配手写笔，适合学生记笔记和网课。,"{""weight_g"":485,""screen"":""11.5 inch"",""pen_support"":true}",4.7,4210,120,学生;护眼;手写笔,学生,记笔记;网课,轻薄;护眼屏;支持手写笔,images/tablets/tablet_001.png
+p202,键盘套装办公平板,平板,MiTech,2199,配键盘保护套，适合学习、办公和资料整理。,"{""weight_g"":520,""screen"":""12 inch"",""keyboard"":true}",4.8,3102,80,办公;键盘套装;大屏,学生;上班族,办公;学习;资料整理,键盘套装;大屏;多任务,images/tablets/tablet_002.png
+p203,便携学生课堂平板,平板,StudyPad,1299,小尺寸便携，适合上课携带和基础笔记。,"{""weight_g"":430,""screen"":""10.4 inch"",""pen_support"":true}",4.5,5620,160,便携;学生党;性价比,学生,上课;记笔记,重量轻;价格友好;续航稳定,images/tablets/tablet_003.png
+p204,高清网课影音平板,平板,ViewTab,1899,高清大屏和长续航，适合网课、阅读和视频学习。,"{""weight_g"":498,""screen"":""11 inch"",""battery_hours"":12}",4.6,3880,100,网课;长续航;高清屏,学生,网课;阅读;视频学习,高清屏;长续航;扬声器清晰,images/tablets/tablet_004.png
+p205,白色通勤降噪耳机,耳机,SoundLite,299,真无线入耳设计，适合通勤和网课。,"{""noise_canceling"":true,""battery_hours"":28}",4.6,9800,260,降噪;通勤;性价比,学生;上班族,通勤;网课,主动降噪;佩戴轻;续航长,images/headphones/headphone_001.png
+p206,黑色头戴降噪耳机,耳机,QuietMax,699,包耳式降噪，适合安静学习和长时间办公。,"{""noise_canceling"":true,""battery_hours"":45}",4.8,4200,90,头戴;降噪;学习,学生;上班族,学习;办公;通勤,降噪强;佩戴舒适;续航长,images/headphones/headphone_002.png
+p207,开放式运动通勤耳机,耳机,OpenFit,249,开放式佩戴，适合通勤、运动和日常听课。,"{""open_ear"":true,""battery_hours"":24}",4.5,7600,180,开放式;运动;通勤,上班族;学生,通勤;运动;网课,不闷耳;轻便;通话清晰,images/headphones/headphone_003.png
+p208,轻量便携头戴耳机,耳机,AirSound,399,轻量头戴结构，音质均衡，适合学习和出行。,"{""noise_canceling"":false,""battery_hours"":35}",4.6,5300,140,轻量;头戴;均衡音质,学生;上班族,学习;通勤;旅行,重量轻;音质均衡;折叠便携,images/headphones/headphone_004.png
+p209,黑色轻量通勤跑鞋,鞋,RunCity,269,轻量缓震设计，适合日常通勤和轻运动。,"{""style"":""commute"",""upper"":""mesh""}",4.6,8720,210,通勤;轻便;缓震,上班族;学生,通勤;轻运动;久走,脚感柔软;轻量鞋面;价格友好,images/shoes/shoes_001.png
+p210,白色极简校园板鞋,鞋,CampusWalk,189,简洁百搭，适合校园穿搭和日常出行。,"{""style"":""casual"",""upper"":""synthetic""}",4.4,13200,300,校园;百搭;低价,学生,上课;日常穿搭,价格低;百搭;易打理,images/shoes/shoes_002.png
+p211,灰色缓震健步鞋,鞋,SoftStep,359,软底缓震，适合久走和通勤。,"{""style"":""walking"",""cushioning"":""soft""}",4.8,6100,130,健步;缓震;久走,上班族;中老年,通勤;久走;旅行,软底舒适;支撑稳定;久走不累,images/shoes/shoes_003.png
+p212,米色复古帆布鞋,鞋,RetroGo,159,复古低帮造型，适合学生日常穿搭。,"{""style"":""canvas"",""upper"":""canvas""}",4.3,11800,260,复古;帆布;校园,学生,上课;日常穿搭,复古百搭;价格友好;轻便,images/shoes/shoes_004.png
+p213,黑色城市电脑背包,背包,CityPack,199,简洁通勤外观，可放 14 英寸电脑。,"{""capacity_l"":18,""laptop_inch"":14}",4.6,9200,240,电脑包;通勤;简洁,学生;上班族,通勤;上课,电脑隔层;轻量;防泼水,images/backpacks/backpack_001.png
+p214,灰色运动双肩包,背包,SportDay,169,容量充足，适合健身、短途和日常通勤。,"{""capacity_l"":23,""water_resistant"":true}",4.5,6800,190,运动;大容量;防泼水,学生;上班族,健身;短途;通勤,容量大;分区清晰;耐用,images/backpacks/backpack_002.png
+p215,深蓝商务电脑背包,背包,BizCarry,399,结构挺括，适合商务通勤和电脑保护。,"{""capacity_l"":20,""laptop_inch"":15.6}",4.7,3100,85,商务;电脑包;通勤,上班族,商务;通勤,电脑保护;外观稳重;收纳分区,images/backpacks/backpack_003.png
+p216,米色学生轻量背包,背包,DailyLite,129,轻量日用双肩包，适合上课和短途出行。,"{""capacity_l"":16,""weight_g"":520}",4.4,8900,270,学生;轻量;日用,学生,上课;短途;通勤,重量轻;价格友好;日常够用,images/backpacks/backpack_004.png

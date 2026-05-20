@@ -1,0 +1,4 @@
+case_id,query,budget_max,category,expected_use_cases
+rec_001,"帮我推荐 2000 以内适合学生记笔记的平板",2000,平板,记笔记
+rec_002,"找 300 以内适合通勤的鞋",300,鞋,通勤
+rec_003,"推荐一个 200 以内的背包",200,背包,

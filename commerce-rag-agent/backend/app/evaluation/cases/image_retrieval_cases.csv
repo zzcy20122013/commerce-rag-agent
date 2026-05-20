@@ -1,0 +1,3 @@
+case_id,image_path,expected_product_ids,category
+image_001,app/data/product_images/img_p011_0.png,p011,鞋
+image_002,app/data/product_images/img_p006_0.png,p006,耳机

@@ -1,0 +1,17 @@
+product_id,category,title,image_file,source,note
+p201,平板,轻薄手写学习平板,images/tablets/tablet_001.png,generated,AI 生成仿真商品图
+p202,平板,键盘套装办公平板,images/tablets/tablet_002.png,generated,AI 生成仿真商品图
+p203,平板,便携学生课堂平板,images/tablets/tablet_003.png,generated,AI 生成仿真商品图
+p204,平板,高清网课影音平板,images/tablets/tablet_004.png,generated,AI 生成仿真商品图
+p205,耳机,白色通勤降噪耳机,images/headphones/headphone_001.png,generated,AI 生成仿真商品图
+p206,耳机,黑色头戴降噪耳机,images/headphones/headphone_002.png,generated,AI 生成仿真商品图
+p207,耳机,开放式运动通勤耳机,images/headphones/headphone_003.png,generated,AI 生成仿真商品图
+p208,耳机,轻量便携头戴耳机,images/headphones/headphone_004.png,generated,AI 生成仿真商品图
+p209,鞋,黑色轻量通勤跑鞋,images/shoes/shoes_001.png,generated,AI 生成仿真商品图
+p210,鞋,白色极简校园板鞋,images/shoes/shoes_002.png,generated,AI 生成仿真商品图
+p211,鞋,灰色缓震健步鞋,images/shoes/shoes_003.png,generated,AI 生成仿真商品图
+p212,鞋,米色复古帆布鞋,images/shoes/shoes_004.png,generated,AI 生成仿真商品图
+p213,背包,黑色城市电脑背包,images/backpacks/backpack_001.png,generated,AI 生成仿真商品图
+p214,背包,灰色运动双肩包,images/backpacks/backpack_002.png,generated,AI 生成仿真商品图
+p215,背包,深蓝商务电脑背包,images/backpacks/backpack_003.png,generated,AI 生成仿真商品图
+p216,背包,米色学生轻量背包,images/backpacks/backpack_004.png,generated,AI 生成仿真商品图
