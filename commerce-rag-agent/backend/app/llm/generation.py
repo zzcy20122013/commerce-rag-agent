@@ -1,6 +1,8 @@
 import os
+from dataclasses import dataclass
 from typing import Protocol
 
+import httpx
 from dotenv import load_dotenv
 
 from app.llm.openai_compatible_client import OpenAICompatibleClient
@@ -14,6 +16,13 @@ class ChatClient(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class GenerationResult:
+    content: str
+    llm_enabled: bool
+    llm_error: str | None = None
+
+
 def generate_shopping_answer(
     *,
     query: str,
@@ -22,7 +31,24 @@ def generate_shopping_answer(
     fallback: str,
     client: ChatClient | None = None,
 ) -> str:
-    return _generate(
+    return generate_shopping_result(
+        query=query,
+        cards=cards,
+        memory=memory,
+        fallback=fallback,
+        client=client,
+    ).content
+
+
+def generate_shopping_result(
+    *,
+    query: str,
+    cards: list[dict],
+    memory: dict,
+    fallback: str,
+    client: ChatClient | None = None,
+) -> GenerationResult:
+    return _generate_result(
         messages=[
             {
                 "role": "system",
@@ -54,8 +80,18 @@ def generate_faq_answer(
     fallback: str,
     client: ChatClient | None = None,
 ) -> str:
+    return generate_faq_result(query=query, hits=hits, fallback=fallback, client=client).content
+
+
+def generate_faq_result(
+    *,
+    query: str,
+    hits: list[dict],
+    fallback: str,
+    client: ChatClient | None = None,
+) -> GenerationResult:
     context = "\n".join(hit.get("text", "") for hit in hits)
-    return _generate(
+    return _generate_result(
         messages=[
             {
                 "role": "system",
@@ -75,14 +111,25 @@ def generate_faq_answer(
 
 
 def _generate(*, messages: list[dict[str, str]], fallback: str, client: ChatClient | None) -> str:
+    return _generate_result(messages=messages, fallback=fallback, client=client).content
+
+
+def _generate_result(
+    *,
+    messages: list[dict[str, str]],
+    fallback: str,
+    client: ChatClient | None,
+) -> GenerationResult:
     if client is None and not _has_provider_key():
-        return fallback
+        return GenerationResult(content=fallback, llm_enabled=False, llm_error="missing_api_key")
     try:
         resolved_client = client or _build_default_client()
         answer = resolved_client.chat_sync(messages, temperature=0.2).strip()
-        return answer or fallback
-    except Exception:
-        return fallback
+        if not answer:
+            return GenerationResult(content=fallback, llm_enabled=False, llm_error="empty_response")
+        return GenerationResult(content=answer, llm_enabled=True)
+    except Exception as error:
+        return GenerationResult(content=fallback, llm_enabled=False, llm_error=_format_llm_error(error))
 
 
 def _build_default_client() -> ChatClient:
@@ -91,3 +138,10 @@ def _build_default_client() -> ChatClient:
 
 def _has_provider_key() -> bool:
     return bool(os.getenv("DOUBAO_API_KEY") or os.getenv("ARK_API_KEY"))
+
+
+def _format_llm_error(error: Exception) -> str:
+    if isinstance(error, httpx.HTTPStatusError):
+        body = error.response.text.replace("\n", " ")[:500]
+        return f"http_{error.response.status_code}: {body}"
+    return f"{type(error).__name__}: {str(error)[:500]}"

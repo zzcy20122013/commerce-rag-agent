@@ -4,16 +4,77 @@ from app.llm.schemas import IntentResult, ShoppingConstraints
 
 
 CATEGORY_KEYWORDS = {
-    "平板": ["平板", "pad", "tablet"],
-    "耳机": ["耳机", "蓝牙耳机", "headphone", "earbuds"],
-    "鞋": ["鞋", "跑鞋", "板鞋", "通勤鞋", "shoe", "sneaker"],
-    "背包": ["背包", "双肩包", "电脑包", "bag", "backpack"],
+    "数码电子": [
+        "数码",
+        "电子",
+        "平板",
+        "pad",
+        "tablet",
+        "耳机",
+        "蓝牙耳机",
+        "headphone",
+        "earbuds",
+        "键盘",
+        "充电宝",
+        "智能手表",
+        "显示器",
+        "路由器",
+        "相机",
+        "电纸书",
+    ],
+    "服饰运动": [
+        "服饰",
+        "运动",
+        "鞋",
+        "跑鞋",
+        "板鞋",
+        "通勤鞋",
+        "shoe",
+        "sneaker",
+        "背包",
+        "双肩包",
+        "电脑包",
+        "bag",
+        "backpack",
+        "卫衣",
+        "冲锋衣",
+        "瑜伽裤",
+        "羽绒服",
+        "外套",
+        "跑步",
+        "健身",
+    ],
+    "美妆护肤": [
+        "美妆",
+        "护肤",
+        "精华",
+        "敏感肌",
+        "修护",
+        "维稳",
+        "保湿",
+        "面霜",
+        "防晒",
+        "爽肤水",
+        "粉底",
+        "唇釉",
+        "眼霜",
+        "洁面",
+        "卸妆",
+    ],
+    "食品饮料": ["食品", "饮料", "零食", "咖啡", "酸奶", "麦片", "牛奶", "茶", "代餐", "早餐", "低脂"],
 }
 USE_CASE_KEYWORDS = {
     "记笔记": ["记笔记", "手写笔", "笔记", "notes", "note"],
     "网课": ["网课", "上课", "学习", "online class", "class"],
     "通勤": ["通勤", "commute"],
     "送礼": ["送礼", "礼物", "女朋友", "男朋友", "gift"],
+    "敏感肌护理": ["敏感肌", "易敏肌", "舒缓", "泛红"],
+    "修护维稳": ["修护", "维稳", "屏障", "强韧"],
+    "保湿补水": ["保湿", "补水", "干皮", "干燥"],
+    "抗初老": ["抗初老", "淡纹", "紧致", "抗皱"],
+    "防晒": ["防晒", "户外", "防水防汗"],
+    "控油": ["控油", "油皮", "油痘肌"],
+    "低脂早餐": ["低脂", "早餐", "代餐", "轻食"],
 }
 PRODUCT_ID_PATTERN = re.compile(r"\bp\d{3}\b", re.IGNORECASE)
 
@@ -39,7 +100,22 @@ def classify_intent(text: str) -> IntentResult:
 
     if constraints.category or _contains_any(
         normalized,
-        ["推荐", "预算", "以内", "以下", "适合", "更轻", "轻一点", "便宜", "换个", "recommend", "under", "budget"],
+        [
+            "推荐",
+            "预算",
+            "以内",
+            "以下",
+            "适合",
+            "更轻",
+            "轻一点",
+            "便宜",
+            "换个",
+            "找一款",
+            "想买",
+            "recommend",
+            "under",
+            "budget",
+        ],
     ):
         confidence = 0.82 if constraints.category or constraints.budget_max else 0.66
         return IntentResult(intent="shopping_guide", confidence=confidence, constraints=constraints)
@@ -107,6 +183,16 @@ def _extract_preferences(text: str, budget: int | None) -> list[str]:
         preferences.append("轻便")
     if _contains_any(lowered, ["舒适", "久走", "护眼"]):
         preferences.append("舒适")
+    if _contains_any(lowered, ["敏感肌", "易敏肌", "温和", "无刺激"]):
+        preferences.append("敏感肌友好")
+    if _contains_any(lowered, ["修护", "维稳", "屏障"]):
+        preferences.append("修护维稳")
+    if _contains_any(lowered, ["保湿", "补水"]):
+        preferences.append("保湿")
+    if _contains_any(lowered, ["抗初老", "抗老", "淡纹", "紧致"]):
+        preferences.append("抗初老")
+    if _contains_any(lowered, ["低脂", "低糖", "代餐"]):
+        preferences.append("低负担")
     return preferences
 
 

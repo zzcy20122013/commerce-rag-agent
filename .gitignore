@@ -38,6 +38,7 @@ local.properties
 commerce-rag-agent/backend/app/data/chroma/
 commerce-rag-agent/backend/app/data/uploads/
 commerce-rag-agent/backend/app/data/imports/
+commerce-rag-agent/backend/app/data/product_images/
 commerce-rag-agent/backend/app/data/*.log
 commerce-rag-agent/backend/app/data/*.err.log
 commerce-rag-agent/backend/app/data/commerce.db

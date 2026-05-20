@@ -7,9 +7,12 @@
    - 接口方式：火山方舟 OpenAI-compatible Chat Completions
    - 配置项：
      LLM_PROVIDER=doubao
-     DOUBAO_API_KEY=你的火山方舟 API Key
+     DOUBAO_API_KEY=
      DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
      DOUBAO_MODEL=doubao-seed-2-0-lite-260215
+   - 注意：当前账号调用模型 ID 返回 InvalidEndpointOrModel.ModelIDAccessDisabled。
+     火山方舟需要在控制台创建/查看自定义接入点，把接入点 ID（通常以 ep- 开头）
+     填到 DOUBAO_MODEL，不能只填模型 ID。
 
 2. 文本 Embedding
    - 正式技术选型：bge-m3 本地模型
@@ -75,4 +78,3 @@ python -m app.scripts.rebuild_indexes
 2. 重点展示类似豆包聊天体验、图片上传、商品卡片、推荐理由和反馈。
 3. 视觉上更像正式 AI 导购产品，而不是开发后台。
 4. 可以和 Web Debug 共用 API client、SSE parser、商品卡片数据结构和上传/反馈接口。
-

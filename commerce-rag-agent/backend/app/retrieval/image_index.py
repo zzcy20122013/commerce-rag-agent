@@ -3,6 +3,7 @@ from typing import Any
 
 import chromadb
 from chromadb.config import Settings
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.embeddings.chinese_clip import ChineseClipEmbedding
@@ -38,6 +39,7 @@ class ImageIndex:
             {
                 "product_id": product.id,
                 "image_id": image.id,
+                "title": product.title,
                 "image_url": image.image_url,
                 "local_path": image.local_path,
                 "category": product.category,
@@ -51,6 +53,14 @@ class ImageIndex:
         ]
         embeddings = [self.embedding.embed_image(image.local_path) for image, product in rows]
         self.collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
+
+    def ensure_product_images_indexed(self, db: Session) -> None:
+        expected_count = db.scalar(select(func.count()).select_from(ProductImage)) or 0
+        if expected_count == 0:
+            return
+        if self.collection.count() >= expected_count:
+            return
+        self.index_product_images(db)
 
     def rebuild_product_images(self, db: Session) -> None:
         try:
