@@ -236,7 +236,7 @@ export function DebugConsole() {
         <div className="chat-header">
           <div>
             <h2>Chat Stream</h2>
-            <p>验证 DeepSeek 回答、商品卡片、图搜和多轮记忆</p>
+            <p>验证 Doubao 回答、商品卡片、图搜和多轮记忆</p>
           </div>
           <div className={`status-pill ${isStreaming ? "live" : ""}`}>{isStreaming ? "Streaming" : "Idle"}</div>
         </div>

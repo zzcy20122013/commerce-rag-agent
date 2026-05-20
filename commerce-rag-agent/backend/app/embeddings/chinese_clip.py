@@ -5,8 +5,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from app.embeddings.doubao_embedding_vision import DoubaoEmbeddingVision
-
 
 class ChineseClipEmbedding:
     """Chinese-CLIP image/text embedding interface with deterministic fallback."""
@@ -18,8 +16,6 @@ class ChineseClipEmbedding:
         self.device = os.getenv("CHINESE_CLIP_DEVICE", "cpu")
         self.enable_real = os.getenv("CHINESE_CLIP_ENABLE_REAL", "false").lower() == "true"
         self.local_files_only = os.getenv("CHINESE_CLIP_LOCAL_FILES_ONLY", "false").lower() == "true"
-        self.provider = os.getenv("IMAGE_EMBEDDING_PROVIDER", os.getenv("EMBEDDING_PROVIDER", "doubao")).lower()
-        self._doubao = DoubaoEmbeddingVision() if self.provider == "doubao" else None
         self._model = None
         self._image_processor = None
         self._tokenizer = None
@@ -28,8 +24,6 @@ class ChineseClipEmbedding:
             configure_offline_mode()
 
     def embed_image(self, path: str) -> list[float]:
-        if self._doubao is not None:
-            return self._doubao.embed_image(path)
         if self.enable_real:
             return self._embed_image_real(path)
         image_path = Path(path)
@@ -37,8 +31,6 @@ class ChineseClipEmbedding:
         return self._embed(payload)
 
     def embed_text(self, text: str) -> list[float]:
-        if self._doubao is not None:
-            return self._doubao.embed_text(text)
         if self.enable_real:
             return self._embed_text_real(text)
         return self._embed(text.encode("utf-8"))

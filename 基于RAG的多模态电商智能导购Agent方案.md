@@ -38,8 +38,8 @@
 | Agent 编排 | LangGraph | 负责意图路由、Agent 流程编排、状态流转 |
 | RAG 框架 | LlamaIndex | 负责知识库索引、检索器封装、FAQ 与商品知识检索 |
 | 文本大模型 | Doubao-Seed-2.0-lite | 负责意图理解、约束提取、推荐理由生成、对比决策 |
-| 文本 Embedding | Doubao-embedding-vision | 用于商品文本、FAQ、营销文档等中文/多语言语义检索 |
-| 图片 Embedding | Doubao-embedding-vision | 用于商品图像向量化和看图找相似商品 |
+| 文本 Embedding | bge-m3 | 用于商品文本、FAQ、营销文档等中文/多语言语义检索 |
+| 图片 Embedding | Chinese-CLIP | 用于商品图像向量化和看图找相似商品 |
 | 向量数据库 | Chroma | 本地持久化向量库，存储文本向量和图片向量 |
 | 结构化数据库 | SQLite | 存储商品、订单、会话、消息、检索记录和用户反馈 |
 | 商品数据层 | 商品 CSV/JSON 导入 + 商品主数据模型 | 模拟真实电商商品中台，管理商品、SKU、价格、库存、标签、卖点和图片 |
@@ -51,7 +51,7 @@
 
 > FastAPI 管服务边界，LangGraph 管 Agent 流程，LlamaIndex 管 RAG 检索，SQLite 和 Chroma 管数据。
 
-补充说明：LlamaIndex 作为检索封装层使用，底层向量存储仍采用 Chroma；文本 embedding 由 Doubao-embedding-vision 提供，图片 embedding 由 Doubao-embedding-vision 提供。
+补充说明：LlamaIndex 作为检索封装层使用，底层向量存储仍采用 Chroma；文本 embedding 由 bge-m3 提供，图片 embedding 由 Chinese-CLIP 提供。
 
 面向理想状态，系统还需要引入“真实电商平台简化版数据层”：使用商品导入管道模拟商品中台，使用本地文件目录模拟对象存储/CDN，使用索引构建任务将商品文本、知识文档和商品图片同步到 SQLite 与 Chroma，从而让 Agent 不依赖少量写死样例，而是面向可扩展的商品库和知识库工作。
 
@@ -84,9 +84,9 @@ flowchart TD
     Multi["MultimodalSearchAgent<br/>看图找相似款"]
 
     Retrieval["Retrieval Layer<br/>LlamaIndex + Custom Retriever"]
-    TextVec["Text Retrieval<br/>Doubao-embedding-vision + Chroma"]
+    TextVec["Text Retrieval<br/>bge-m3 + Chroma"]
     DocsIndex["Docs Ingestion<br/>文档解析 / Chunk / Metadata"]
-    ImageVec["Image Retrieval<br/>Doubao-embedding-vision + Chroma"]
+    ImageVec["Image Retrieval<br/>Chinese-CLIP + Chroma"]
     Filter["Structured Filter<br/>SQLite 条件过滤"]
     Rerank["Rerank<br/>相似度 + 价格 + 评价 + 库存"]
 
@@ -240,8 +240,8 @@ React 前端不作为正式用户端，主要用于调试后端能力。
   -> 数据清洗与字段校验
   -> 写入 SQLite 商品表/图片表/文档表
   -> 生成商品文本 chunk
-  -> Doubao-embedding-vision 生成文本向量
-  -> Doubao-embedding-vision 生成图片向量
+  -> bge-m3 生成文本向量
+  -> Chinese-CLIP 生成图片向量
   -> 写入 Chroma collection
   -> Agent 在线检索与推荐
 ```
@@ -308,7 +308,7 @@ LangGraph 负责把用户请求编排成可控的 Agent 流程。它不直接负
 
 ### 5.7 RAG 检索层
 
-RAG 检索层由 LlamaIndex、Doubao-embedding-vision、Chroma 和 SQLite 组成。
+RAG 检索层由 LlamaIndex、bge-m3、Chroma 和 SQLite 组成。
 
 文本知识来源：
 
@@ -331,7 +331,7 @@ RAG 检索层由 LlamaIndex、Doubao-embedding-vision、Chroma 和 SQLite 组成
   -> 解析文本
   -> chunk 切分
   -> metadata 标注
-  -> Doubao-embedding-vision embedding
+  -> bge-m3 embedding
   -> 写入 Chroma
   -> RAG 检索时参与召回
 ```
@@ -340,7 +340,7 @@ RAG 检索层由 LlamaIndex、Doubao-embedding-vision、Chroma 和 SQLite 组成
 
 | Collection | 内容 | Embedding 模型 |
 | --- | --- | --- |
-| `knowledge_docs` | 上传的营销文档、导购话术、活动说明、商品补充资料 | Doubao-embedding-vision |
+| `knowledge_docs` | 上传的营销文档、导购话术、活动说明、商品补充资料 | bge-m3 |
 
 metadata 示例：
 
@@ -360,7 +360,7 @@ sequenceDiagram
     participant User as 用户
     participant Agent as ShoppingGuideAgent
     participant DB as SQLite
-    participant Embed as Doubao-embedding-vision
+    participant Embed as bge-m3
     participant Chroma as Chroma
     participant LLM as Doubao-Seed-2.0-lite
 
@@ -380,11 +380,11 @@ sequenceDiagram
 
 ### 5.8 多模态图片检索层
 
-图片检索使用 Doubao-embedding-vision 对商品图片和用户上传图片进行向量化。
+图片检索使用 Chinese-CLIP 对商品图片和用户上传图片进行向量化。
 
 图片检索流程：
 
-1. 离线处理商品图片，生成 Doubao-embedding-vision 图片向量。
+1. 离线处理商品图片，生成 Chinese-CLIP 图片向量。
 2. 将商品图片向量写入 Chroma。
 3. 用户上传图片。
 4. 系统生成上传图片 embedding。
@@ -482,11 +482,11 @@ data: {"status":"ok"}
 
 | Collection | 内容 | Embedding 模型 |
 | --- | --- | --- |
-| `product_text` | 商品标题、详情、参数、卖点 | Doubao-embedding-vision |
-| `faq` | 售后、物流、退货、支付 FAQ | Doubao-embedding-vision |
-| `marketing_docs` | 营销文档、活动说明 | Doubao-embedding-vision |
-| `knowledge_docs` | 用户上传/导入的非结构化知识库文档 | Doubao-embedding-vision |
-| `product_images` | Chroma 商品图片向量 collection | Doubao-embedding-vision |
+| `product_text` | 商品标题、详情、参数、卖点 | bge-m3 |
+| `faq` | 售后、物流、退货、支付 FAQ | bge-m3 |
+| `marketing_docs` | 营销文档、活动说明 | bge-m3 |
+| `knowledge_docs` | 用户上传/导入的非结构化知识库文档 | bge-m3 |
+| `product_images` | Chroma 商品图片向量 collection | Chinese-CLIP |
 
 ### 6.3 商品数据导入与索引重建策略
 
@@ -527,8 +527,8 @@ flowchart TD
     E --> F["写入 SQLite 商品/图片/文档元数据"]
     E --> G["生成商品文本 chunk"]
     E --> H["读取商品图片"]
-    G --> I["Doubao-embedding-vision 文本向量"]
-    H --> J["Doubao-embedding-vision 图片向量"]
+    G --> I["bge-m3 文本向量"]
+    H --> J["Chinese-CLIP 图片向量"]
     I --> K["Chroma 文本 Collection"]
     J --> L["Chroma 图片 Collection"]
     F --> M["导入报告与索引任务状态"]
@@ -543,7 +543,7 @@ flowchart TD
     C --> D["IntentRouterAgent 识别意图"]
     D --> E["ShoppingGuideAgent 提取约束"]
     E --> F["SQLite 结构化过滤"]
-    F --> G["Doubao-embedding-vision + Chroma 语义召回"]
+    F --> G["bge-m3 + Chroma 语义召回"]
     G --> H["Rerank 综合排序"]
     H --> I["Doubao-Seed-2.0-lite 生成导购回答"]
     I --> J["SSE 流式返回文本"]
@@ -556,7 +556,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     A["用户上传图片 + 文本要求"] --> B["FastAPI 保存图片"]
-    B --> C["Doubao-embedding-vision 生成图片向量"]
+    B --> C["Chinese-CLIP 生成图片向量"]
     C --> D["Chroma 图片向量召回"]
     A --> E["Doubao-Seed-2.0-lite 提取文本约束"]
     E --> F["SQLite 过滤价格/库存/类目"]
@@ -638,7 +638,7 @@ flowchart LR
 1. 搭建 FastAPI。
 2. 建立 SQLite 商品表、会话表、消息表。
 3. 接入 Doubao-Seed-2.0-lite。
-4. 预留 Doubao-embedding-vision 文本 embedding 接口。
+4. 接入 bge-m3 文本 embedding 接口。
 5. 建立 Chroma 文本向量库。
 6. 实现 `.md`、`.txt`、`.csv` 文档导入，构建 `knowledge_docs` 专属知识库。
 7. 实现 `IntentRouterAgent`、`ShoppingGuideAgent`、`FAQAgent` 和 `ChitchatAgent`。
@@ -662,26 +662,26 @@ flowchart LR
 7. 记录导入任务、索引任务、失败原因和导入报告。
 8. 将样品库从 20 条扩展到 100-300 条，覆盖多个类目、价格带和使用场景。
 
-### 第三阶段：真实 Doubao-embedding-vision 文本 RAG 接入
+### 第三阶段：真实 bge-m3 文本 RAG 接入
 
 目标：提升文本检索、FAQ 检索、营销文档检索和商品知识问答的真实语义能力。
 
 内容：
 
-1. 接入真实 Doubao-embedding-vision 模型。
+1. 接入真实 bge-m3 模型。
 2. 为商品标题、描述、参数、卖点、标签生成文本向量。
 3. 为 FAQ、营销文档、商品详情文档生成 chunk embedding。
 4. 建立或重建 `product_text`、`faq`、`marketing_docs`、`knowledge_docs` collection。
 5. 优化文本召回策略：结构化过滤 + 向量召回 + 关键词兜底。
 6. 调整 Prompt，使回答严格基于检索结果和商品数据生成。
 
-### 第四阶段：真实 Doubao-embedding-vision 多模态图搜
+### 第四阶段：真实 Chinese-CLIP 多模态图搜
 
 目标：实现真正可用的“看图找类似款”能力。
 
 内容：
 
-1. 接入真实 Doubao-embedding-vision 模型。
+1. 接入真实 bge-m3 模型。
 2. 为商品主图和详情图生成图片向量。
 3. 建立 `product_images` Chroma collection。
 4. 实现用户上传图片 embedding。
@@ -813,11 +813,12 @@ commerce-rag-agent/
 
 ## 12. 方案总结
 
-本项目以 Android 移动端体验为核心，以 FastAPI 作为统一后端入口，以 LangGraph 组织多 Agent 流程，以 LlamaIndex + Chroma 承载 RAG 检索，以 Doubao-embedding-vision 统一支持文本与图片向量检索。
+本项目以 Android 移动端体验为核心，以 FastAPI 作为统一后端入口，以 LangGraph 组织多 Agent 流程，以 LlamaIndex + Chroma 承载 RAG 检索，以 bge-m3 支持文本向量检索，以 Chinese-CLIP 支持图片向量检索。
 
-第一版系统应优先实现“文本导购推荐 + 商品卡片 + SSE 流式展示”的闭环。随后需要补齐真实平台简化数据层，让商品、图片、文档和索引能够批量导入、重建和评测。再逐步完善真实 Doubao-embedding-vision 图文向量、图片找同款、对比决策、订单查询、反馈评测、Docker 化和数据库升级。
+第一版系统应优先实现“文本导购推荐 + 商品卡片 + SSE 流式展示”的闭环。随后需要补齐真实平台简化数据层，让商品、图片、文档和索引能够批量导入、重建和评测。再逐步完善真实 bge-m3 文本向量和 Chinese-CLIP 图片向量、图片找同款、对比决策、订单查询、反馈评测、Docker 化和数据库升级。
 
 最终目标不是做一个普通聊天机器人，而是做一个可以解释推荐理由、能看图找货、能持续从用户反馈中改进的电商智能导购 Agent。
 
 本方案保持理想目标状态：真实商品平台可通过商品导入和索引构建流程持续扩容；Web Debug 用于工程调试；Demo Showcase 和 Android 端用于正式展示；Agent 层负责意图理解、咨询问答和决策辅助；RAG 与多模态检索层负责让回答建立在商品数据、知识文档和视觉相似度之上。
+
 

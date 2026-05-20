@@ -3,7 +3,6 @@ from typing import Protocol
 
 from dotenv import load_dotenv
 
-from app.llm.deepseek_client import DeepSeekClient
 from app.llm.openai_compatible_client import OpenAICompatibleClient
 
 
@@ -87,14 +86,8 @@ def _generate(*, messages: list[dict[str, str]], fallback: str, client: ChatClie
 
 
 def _build_default_client() -> ChatClient:
-    provider = os.getenv("LLM_PROVIDER", "doubao").lower()
-    if provider == "deepseek":
-        return DeepSeekClient()
     return OpenAICompatibleClient()
 
 
 def _has_provider_key() -> bool:
-    provider = os.getenv("LLM_PROVIDER", "doubao").lower()
-    if provider == "deepseek":
-        return bool(os.getenv("DEEPSEEK_API_KEY"))
     return bool(os.getenv("DOUBAO_API_KEY") or os.getenv("ARK_API_KEY"))

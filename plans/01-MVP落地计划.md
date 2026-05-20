@@ -6,7 +6,7 @@
 
 **Architecture:** 第一阶段只做文本导购，不接图片检索和 Android。FastAPI 提供服务边界，LangGraph 编排 IntentRouter 与 ShoppingGuide，LlamaIndex + Chroma 负责文本检索，SQLite 存商品、会话、消息、反馈和日志。
 
-**Tech Stack:** Python FastAPI, LangGraph, LlamaIndex, Chroma, SQLite, SQLAlchemy, Doubao-embedding-vision, Doubao-Seed-2.0-lite, SSE, React + Vite debug UI.
+**Tech Stack:** Python FastAPI, LangGraph, LlamaIndex, Chroma, SQLite, SQLAlchemy, bge-m3, Chinese-CLIP, Doubao-Seed-2.0-lite, SSE, React + Vite debug UI.
 
 ---
 
@@ -20,7 +20,7 @@
 - SQLite 商品、会话、消息、反馈、检索日志表
 - 商品 seed 数据
 - Doubao-Seed-2.0-lite client
-- Doubao-embedding-vision 文本 embedding
+- bge-m3 文本 embedding
 - Chroma 文本向量库
 - LlamaIndex 商品与 FAQ 检索
 - `.md`、`.txt`、`.csv` 非结构化文档导入
@@ -32,7 +32,7 @@
 
 不包含：
 
-- Doubao-embedding-vision 图片检索
+- Chinese-CLIP 图片检索
 - Android 原生端
 - Docker Compose
 - PostgreSQL 迁移
@@ -193,7 +193,7 @@ SSE 返回 `product_cards` 事件：
 - Create: `commerce-rag-agent/backend/app/retrieval/retrievers.py`
 - Create: `commerce-rag-agent/backend/app/scripts/ingest_text.py`
 
-- [ ] 封装 Doubao-embedding-vision embedding model。
+- [ ] 封装 bge-m3 embedding model。
 - [ ] 建立 Chroma 持久化目录 `backend/app/data/chroma`。
 - [ ] 建立 `product_text` collection。
 - [ ] 建立 `faq` collection。
@@ -215,7 +215,7 @@ SSE 返回 `product_cards` 事件：
 - [ ] 支持 `.md`、`.txt`、`.csv` 三类文件导入。
 - [ ] 解析文档文本并按固定长度 chunk 切分。
 - [ ] 为每个 chunk 写入 metadata：`doc_type`、`source_file`、`category`、`version`。
-- [ ] 使用 Doubao-embedding-vision 生成 embedding。
+- [ ] 使用 bge-m3 生成 embedding。
 - [ ] 写入 Chroma `knowledge_docs` collection。
 - [ ] 将文档元数据写入 SQLite `documents` 表。
 - [ ] 提供 `/api/docs/ingest` 接口。
@@ -300,4 +300,5 @@ MVP 完成时，必须满足：
 8. Task 8
 
 每个 Task 独立提交一次，便于回滚和检查。
+
 

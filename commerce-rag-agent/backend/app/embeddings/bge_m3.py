@@ -5,8 +5,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from app.embeddings.doubao_embedding_vision import DoubaoEmbeddingVision
-
 
 class BgeM3Embedding:
     """bge-m3 embedding interface with deterministic fallback for local development."""
@@ -18,21 +16,15 @@ class BgeM3Embedding:
         self.device = os.getenv("BGE_M3_DEVICE", "cpu")
         self.use_fp16 = os.getenv("BGE_M3_USE_FP16", "false").lower() == "true"
         self.enable_real = os.getenv("BGE_M3_ENABLE_REAL", "false").lower() == "true"
-        self.provider = os.getenv("TEXT_EMBEDDING_PROVIDER", os.getenv("EMBEDDING_PROVIDER", "doubao")).lower()
-        self._doubao = DoubaoEmbeddingVision() if self.provider == "doubao" else None
         self._model = None
         configure_huggingface_home()
 
     def embed_query(self, text: str) -> list[float]:
-        if self._doubao is not None:
-            return self._doubao.embed_query(text)
         if self.enable_real:
             return self._embed_real([text])[0]
         return self._embed(text)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        if self._doubao is not None:
-            return self._doubao.embed_documents(texts)
         if self.enable_real:
             return self._embed_real(texts)
         return [self._embed(text) for text in texts]
