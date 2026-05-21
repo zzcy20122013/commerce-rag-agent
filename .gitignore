@@ -35,18 +35,21 @@ local.properties
 *.db
 *.sqlite
 *.sqlite3
-commerce-rag-agent/backend/app/data/chroma/
-commerce-rag-agent/backend/app/data/uploads/
-commerce-rag-agent/backend/app/data/imports/
-commerce-rag-agent/backend/app/data/product_images/
-commerce-rag-agent/backend/app/data/*.log
-commerce-rag-agent/backend/app/data/*.err.log
-commerce-rag-agent/backend/app/data/commerce.db
+backend/app/data/chroma/
+backend/app/data/uploads/
+backend/app/data/imports/
+backend/app/data/product_images/
+backend/app/data/*.log
+backend/app/data/*.err.log
+backend/app/data/commerce.db
 
 # Local model weights and caches
 /models/
-commerce-rag-agent/backend/.cache/
-commerce-rag-agent/backend/models/
+backend/.cache/
+backend/models/
+
+# Frontend build cache
+web-debug/tsconfig.tsbuildinfo
 
 # Reference repositories downloaded for analysis
 repos/
