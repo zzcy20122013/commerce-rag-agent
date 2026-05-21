@@ -51,9 +51,6 @@ backend/models/
 # Frontend build cache
 web-debug/tsconfig.tsbuildinfo
 
-# Reference repositories downloaded for analysis
-repos/
-
 # OS/editor noise
 .DS_Store
 Thumbs.db
