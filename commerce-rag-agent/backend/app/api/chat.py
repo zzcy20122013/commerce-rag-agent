@@ -95,6 +95,8 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
         )
         yield sse("trace", result.get("trace", []))
         yield sse("product_cards", result.get("product_cards", []))
+        if result.get("comparison"):
+            yield sse("comparison", result.get("comparison", {}))
         yield sse("done", {"ok": True})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

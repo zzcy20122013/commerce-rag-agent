@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { submitFeedback } from "../api/feedback";
-import type { ProductCard } from "../api/types";
+import type { ComparisonPayload, ProductCard } from "../api/types";
+import { ComparisonTable } from "./ComparisonTable";
 import { ProductCards } from "./ProductCards";
 
 export type UiMessage = {
@@ -9,6 +10,7 @@ export type UiMessage = {
   role: "user" | "assistant";
   content: string;
   cards: ProductCard[];
+  comparison?: ComparisonPayload | null;
   pending?: boolean;
   feedback?: 1 | -1;
 };
@@ -58,6 +60,7 @@ export function ChatMessage({ message, onFeedback, onError }: ChatMessageProps) 
           {message.content ? renderInlineMarkdown(message.content) : message.pending ? "等待响应..." : ""}
         </div>
         {message.pending && <div className="stream-indicator">streaming</div>}
+        <ComparisonTable comparison={message.comparison} />
         <ProductCards cards={message.cards} />
         {isAssistant && !message.pending && message.id.startsWith("msg_") && (
           <div className="feedback-row">

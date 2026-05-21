@@ -3,10 +3,20 @@ from sqlalchemy.orm import Session
 from app.agents.intent_router import extract_shopping_constraints
 from app.llm.generation import generate_shopping_result
 from app.models.tables import Product
+from app.retrieval.text_index import TextIndex
 from app.services.product_service import filter_products
 
 
-MEMORY_FIELDS = ["budget_max", "category", "audience", "use_cases", "preferences", "product_ids"]
+MEMORY_FIELDS = [
+    "budget_max",
+    "category",
+    "subcategory",
+    "audience",
+    "use_cases",
+    "preferences",
+    "product_ids",
+    "strict_filter",
+]
 
 
 def shopping_guide_node(db: Session):
@@ -17,22 +27,59 @@ def shopping_guide_node(db: Session):
         products = filter_products(
             db,
             category=memory.get("category"),
+            subcategory=memory.get("subcategory"),
             budget_max=memory.get("budget_max"),
         )
-        products = sort_products_for_memory(products, memory, query)
+        if not products and memory.get("strict_filter"):
+            cards: list[dict] = []
+            answer = build_recommendation_answer(cards, memory, strict_no_match=True)
+            trace_item = {
+                "node": "shopping_guide",
+                "cards": [],
+                "llm_enabled": False,
+                "retrieval_mode": "sqlite_strict_filter_empty",
+                "sqlite_candidates": 0,
+                "chroma_hits": [],
+                "fallback_reason": "strict_filter_no_match",
+            }
+            return {
+                **state,
+                "constraints": constraints,
+                "memory": {**memory, "last_product_ids": []},
+                "retrieved_items": [],
+                "product_cards": cards,
+                "no_exact_match": True,
+                "answer": answer,
+                "trace": state.get("trace", []) + [trace_item],
+            }
+        no_exact_match = False
+        if not products and memory.get("subcategory") and memory.get("budget_max"):
+            no_exact_match = True
+            products = filter_products(
+                db,
+                category=memory.get("category"),
+                subcategory=memory.get("subcategory"),
+                budget_max=None,
+            )
+        products, retrieval_trace = hybrid_retrieve_and_rerank(db, products, memory, query)
         cards = [product_to_card(product, memory, rank) for rank, product in enumerate(products[:3], start=1)]
-        fallback_answer = build_recommendation_answer(cards, memory)
+        fallback_answer = build_recommendation_answer(cards, memory, no_exact_match=no_exact_match)
+        generation_memory = build_generation_memory(memory, cards, no_exact_match=no_exact_match)
         generation = generate_shopping_result(
             query=query,
             cards=cards,
-            memory=memory,
+            memory=generation_memory,
             fallback=fallback_answer,
         )
+        answer = generation.content
         trace_item = {
             "node": "shopping_guide",
             "cards": [card["product_id"] for card in cards],
             "llm_enabled": generation.llm_enabled,
+            **retrieval_trace,
         }
+        if no_exact_match:
+            trace_item["fallback_reason"] = "no_exact_subcategory_budget_match"
         if generation.llm_error:
             trace_item["llm_error"] = generation.llm_error
         return {
@@ -41,7 +88,8 @@ def shopping_guide_node(db: Session):
             "memory": {**memory, "last_product_ids": [product.id for product in products[:3]]},
             "retrieved_items": [{"product_id": product.id, "title": product.title} for product in products[:5]],
             "product_cards": cards,
-            "answer": generation.content,
+            "no_exact_match": no_exact_match,
+            "answer": answer,
             "trace": state.get("trace", []) + [trace_item],
         }
 
@@ -58,6 +106,9 @@ def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
                 memory[field] = merged
             else:
                 memory[field] = value
+    memory["strict_filter"] = bool(constraints.get("strict_filter"))
+    if constraints.get("category") and not constraints.get("subcategory") and _asks_for_broad_category(query):
+        memory.pop("subcategory", None)
     lowered = query.lower()
     if any(word in lowered for word in ["更轻", "轻一点", "轻便", "portable"]):
         _append_preference(memory, "轻便")
@@ -95,10 +146,107 @@ def sort_products_for_memory(products: list[Product], memory: dict, query: str =
     return products
 
 
+def hybrid_retrieve_and_rerank(
+    db: Session,
+    candidates: list[Product],
+    memory: dict,
+    query: str,
+) -> tuple[list[Product], dict]:
+    if not candidates:
+        return [], {"retrieval_mode": "sqlite_filter_empty", "sqlite_candidates": 0, "chroma_hits": []}
+
+    candidate_by_id = {product.id: product for product in candidates}
+    query_text = build_retrieval_query(query, memory)
+    try:
+        index = TextIndex()
+        index.ensure_products_indexed(db)
+        hits = index.search_products(
+            query_text,
+            limit=min(max(len(candidates), 10), 30),
+            product_ids=list(candidate_by_id),
+        )
+    except Exception as error:
+        return sort_products_for_memory(candidates, memory, query), {
+            "retrieval_mode": "sqlite_filter_local_rerank",
+            "sqlite_candidates": len(candidates),
+            "chroma_hits": [],
+            "chroma_error": f"{type(error).__name__}: {str(error)[:160]}",
+        }
+
+    semantic_scores = {
+        hit["metadata"]["product_id"]: _semantic_score(hit.get("distance"))
+        for hit in hits
+        if hit.get("metadata", {}).get("product_id") in candidate_by_id
+    }
+    ranked = sorted(
+        candidates,
+        key=lambda product: (
+            -_hybrid_score(product, memory, query, semantic_scores),
+            product.price if "性价比" in set(memory.get("preferences", [])) else 0,
+            -product.rating,
+            -product.sales,
+        ),
+    )
+    return ranked, {
+        "retrieval_mode": "sqlite_filter_chroma_rerank",
+        "sqlite_candidates": len(candidates),
+        "chroma_hits": [hit["metadata"]["product_id"] for hit in hits[:5] if hit.get("metadata")],
+    }
+
+
+def build_retrieval_query(query: str, memory: dict) -> str:
+    parts = [
+        query,
+        memory.get("category") or "",
+        memory.get("subcategory") or "",
+        memory.get("audience") or "",
+        " ".join(memory.get("use_cases", [])),
+        " ".join(memory.get("preferences", [])),
+    ]
+    if memory.get("budget_max"):
+        parts.append(f"{memory['budget_max']} 元以内")
+    return " ".join(part for part in parts if part).strip()
+
+
+def build_generation_memory(memory: dict, cards: list[dict], *, no_exact_match: bool) -> dict:
+    generation_memory = dict(memory)
+    generation_memory["no_exact_match"] = no_exact_match
+    if no_exact_match:
+        budget = memory.get("budget_max")
+        candidate_prices = [card["price"] for card in cards]
+        lowest_price = min(candidate_prices) if candidate_prices else None
+        gap = lowest_price - budget if budget and lowest_price else None
+        generation_memory["answer_policy"] = (
+            "没有严格符合预算和子品类的商品；不能把超预算备选说成预算内推荐。"
+            "请先明确说明没有精确匹配，再解释为什么展示这些同子品类备选，"
+            "给出预算差距、是否值得加预算、以及如果预算不变可以怎么调整需求。"
+            "不要推荐候选卡片之外的具体商品。"
+        )
+        generation_memory["budget_gap_min"] = gap
+        generation_memory["lowest_candidate_price"] = lowest_price
+    return generation_memory
+
+
+def _semantic_score(distance: float | None) -> float:
+    if distance is None:
+        return 0.0
+    return 1.0 / (1.0 + max(float(distance), 0.0))
+
+
+def _hybrid_score(product: Product, memory: dict, query: str, semantic_scores: dict[str, float]) -> float:
+    semantic = semantic_scores.get(product.id, 0.0)
+    local = _score_product(product, memory, query)
+    return semantic * 20 + local
+
+
 def product_to_card(product: Product, memory: dict, rank: int) -> dict:
     reasons = []
     if memory.get("budget_max") and product.price <= memory["budget_max"]:
         reasons.append("预算内")
+    elif memory.get("budget_max") and product.price > memory["budget_max"]:
+        reasons.append("超预算备选")
+    if memory.get("subcategory"):
+        reasons.append(memory["subcategory"])
     for use_case in memory.get("use_cases", []):
         reasons.append(f"适合{use_case}")
     for preference in memory.get("preferences", []):
@@ -120,12 +268,56 @@ def product_to_card(product: Product, memory: dict, rank: int) -> dict:
     }
 
 
-def build_recommendation_answer(cards: list[dict], memory: dict) -> str:
+def build_recommendation_answer(
+    cards: list[dict],
+    memory: dict,
+    *,
+    no_exact_match: bool = False,
+    strict_no_match: bool = False,
+) -> str:
     if not cards:
+        if strict_no_match:
+            category = memory.get("subcategory") or memory.get("category") or "商品"
+            budget = f"{memory['budget_max']} 元以内" if memory.get("budget_max") else "当前条件"
+            return (
+                f"我这边没有找到严格符合“{budget}、{category}”的现货商品。"
+                "这种问法更像条件筛选，我不会把超预算或不相关的商品硬塞给你。"
+                "你可以把预算放宽一点，或者换成相邻品类再查。"
+            )
         return "我暂时没有找到完全符合条件的商品，可以放宽预算或换一个品类再试。"
     category = memory.get("category") or "商品"
+    subcategory = memory.get("subcategory") or ""
     budget = f"{memory['budget_max']} 元以内" if memory.get("budget_max") else ""
-    return f"我按{budget}{category}需求筛选了 {len(cards)} 个更合适的选择，优先考虑预算、用途和库存。"
+    if no_exact_match:
+        prices = [card["price"] for card in cards]
+        lowest_price = min(prices) if prices else None
+        gap_text = ""
+        if lowest_price and memory.get("budget_max"):
+            gap_text = f"我看到最接近的一款也要 {lowest_price} 元，比你的预算高 {lowest_price - memory['budget_max']} 元。"
+        return (
+            f"你这个预算卡得比较紧，我暂时没找到严格符合 {budget}{subcategory or category} 的选择。"
+            f"{gap_text}"
+            "下面这些只能算同类里的加预算备选；如果预算不能提高，我更建议你放宽品牌、屏幕尺寸，或者等活动价/看二手。"
+        )
+    top_card = cards[0]
+    if len(cards) == 1:
+        reason_text = "、".join(top_card.get("reasons", [])[:2])
+        return (
+            f"我会先看这款：{top_card['title']}，价格是 {top_card['price']} 元。"
+            f"{f'它和你的需求主要匹配在{reason_text}。' if reason_text else ''}"
+            "如果你想更稳一点，可以再补充预算、品牌偏好或不能接受的点，我再帮你缩小范围。"
+        )
+    second_card = cards[1]
+    return (
+        f"这几款里我会优先看 {top_card['title']}，价格 {top_card['price']} 元，整体更贴近你的需求。"
+        f"如果你更想省钱，可以再看看 {second_card['title']}，它是 {second_card['price']} 元。"
+        "我建议你先按预算和最在意的使用场景二选一，不用只盯参数。"
+    )
+
+
+def _asks_for_broad_category(query: str) -> bool:
+    lowered = query.lower()
+    return any(keyword in lowered for keyword in ["都有什么", "有哪些", "电子产品", "数码产品", "全部"])
 
 
 def _append_preference(memory: dict, value: str) -> None:

@@ -14,12 +14,12 @@ class OpenAICompatibleClient:
         api_key_env: str = "DOUBAO_API_KEY",
         base_url_env: str = "DOUBAO_BASE_URL",
         model_env: str = "DOUBAO_MODEL",
-        timeout: float = 30.0,
+        timeout: float | None = None,
     ) -> None:
         self.api_key = api_key or os.getenv(api_key_env) or os.getenv("ARK_API_KEY", "")
         self.base_url = (base_url or os.getenv(base_url_env) or "https://ark.cn-beijing.volces.com/api/v3").rstrip("/")
         self.model = model or os.getenv(model_env) or "doubao-seed-2-0-lite-260215"
-        self.timeout = timeout
+        self.timeout = timeout or float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 
     def chat_sync(self, messages: list[dict[str, str]], *, temperature: float = 0.2) -> str:
         payload = self._payload(messages, temperature=temperature, stream=False)

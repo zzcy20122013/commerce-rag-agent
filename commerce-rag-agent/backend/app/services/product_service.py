@@ -1,13 +1,21 @@
+import json
+import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.tables import Product, ProductTag
+from app.models.tables import Document, Product, ProductTag
+from app.services.taxonomy import product_matches_subcategory
+
+
+PRODUCT_ID_PATTERN = re.compile(r"\bp(?:_\w+)?_\d{3}\b|\bp\d{3}\b", re.IGNORECASE)
 
 
 def filter_products(
     db: Session,
     *,
     category: str | None = None,
+    subcategory: str | None = None,
     budget_max: int | None = None,
     in_stock_only: bool = True,
 ) -> list[Product]:
@@ -19,7 +27,10 @@ def filter_products(
     if in_stock_only:
         statement = statement.where(Product.stock > 0)
     statement = statement.order_by(Product.rating.desc(), Product.sales.desc())
-    return list(db.scalars(statement).all())
+    products = list(db.scalars(statement).all())
+    if subcategory:
+        products = [product for product in products if product_matches_subcategory(product, subcategory)]
+    return products
 
 
 def get_products_by_ids(db: Session, product_ids: list[str]) -> list[Product]:
@@ -32,7 +43,7 @@ def get_products_by_ids(db: Session, product_ids: list[str]) -> list[Product]:
 
 def find_products_by_query(db: Session, query: str, *, limit: int = 5) -> list[Product]:
     lowered = query.lower()
-    explicit_ids = [token for token in lowered.replace(",", " ").split() if token.startswith("p")]
+    explicit_ids = [match.lower() for match in PRODUCT_ID_PATTERN.findall(lowered)]
     if explicit_ids:
         found = get_products_by_ids(db, explicit_ids)
         if found:
@@ -56,3 +67,29 @@ def find_products_by_query(db: Session, query: str, *, limit: int = 5) -> list[P
 
 def get_product_tags(db: Session, product_id: str) -> list[ProductTag]:
     return list(db.scalars(select(ProductTag).where(ProductTag.product_id == product_id)).all())
+
+
+def get_product_knowledge_docs(db: Session, product_id: str, *, limit: int = 4) -> list[dict]:
+    rows = list(
+        db.scalars(
+            select(Document)
+            .where(Document.doc_type == "product_knowledge")
+            .where(Document.source_file.like(f"{product_id}:%"))
+            .order_by(Document.source_file.asc())
+        ).all()
+    )
+    docs = []
+    for row in rows[:limit]:
+        try:
+            metadata = json.loads(row.metadata_json or "{}")
+        except json.JSONDecodeError:
+            metadata = {}
+        docs.append(
+            {
+                "id": row.id,
+                "source_file": row.source_file,
+                "text": metadata.get("text", ""),
+                "metadata": metadata,
+            }
+        )
+    return docs

@@ -53,7 +53,14 @@ function parseSseBlock(block: string): DebugEvent | null {
   const event = eventLine.replace("event:", "").trim();
   const rawData = dataLine.replace("data:", "").trim();
   const data = safeJson(rawData);
-  if (event === "message" || event === "trace" || event === "product_cards" || event === "done" || event === "error") {
+  if (
+    event === "message" ||
+    event === "trace" ||
+    event === "product_cards" ||
+    event === "comparison" ||
+    event === "done" ||
+    event === "error"
+  ) {
     return { event, data, raw: block } as DebugEvent;
   }
   return null;

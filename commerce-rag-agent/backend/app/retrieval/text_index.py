@@ -63,6 +63,14 @@ class TextIndex:
         ]
         self._upsert(self.product_collection, ids, documents, metadatas)
 
+    def ensure_products_indexed(self, db: Session) -> None:
+        try:
+            if self.product_collection.count() > 0:
+                return
+        except Exception:
+            pass
+        self.index_products(db)
+
     def rebuild_products(self, db: Session) -> None:
         self._reset_collection("product_text")
         self.index_products(db)
@@ -80,8 +88,14 @@ class TextIndex:
         self._reset_collection("faq")
         self.index_faqs(faqs)
 
-    def search_products(self, query: str, *, limit: int = 5) -> list[dict[str, Any]]:
-        return self._query(self.product_collection, query, limit)
+    def search_products(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        product_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        return self._query(self.product_collection, query, limit, product_ids=product_ids)
 
     def search_faq(self, query: str, *, limit: int = 3) -> list[dict[str, Any]]:
         return self._query(self.faq_collection, query, limit)
@@ -94,10 +108,21 @@ class TextIndex:
             embeddings=self.embedding.embed_documents(documents),
         )
 
-    def _query(self, collection: Any, query: str, limit: int) -> list[dict[str, Any]]:
+    def _query(
+        self,
+        collection: Any,
+        query: str,
+        limit: int,
+        *,
+        product_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        where = None
+        if product_ids:
+            where = {"product_id": product_ids[0]} if len(product_ids) == 1 else {"product_id": {"$in": product_ids}}
         result = collection.query(
             query_embeddings=[self.embedding.embed_query(query)],
             n_results=limit,
+            where=where,
             include=["documents", "metadatas", "distances"],
         )
         return [

@@ -6,6 +6,11 @@ import httpx
 from dotenv import load_dotenv
 
 from app.llm.openai_compatible_client import OpenAICompatibleClient
+from app.llm.prompt_registry import (
+    build_decision_guide_messages,
+    build_faq_messages,
+    build_shopping_messages,
+)
 
 
 load_dotenv()
@@ -49,25 +54,22 @@ def generate_shopping_result(
     client: ChatClient | None = None,
 ) -> GenerationResult:
     return _generate_result(
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "你是专业、克制、可信的电商导购。"
-                    "只能基于给定商品卡片和用户约束回答，不编造商品参数。"
-                    "回答要简洁，说明筛选逻辑和每个推荐的核心理由。"
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"用户问题：{query}\n"
-                    f"已提取约束：{memory}\n"
-                    f"候选商品卡片：{cards}\n"
-                    "请生成一段自然中文导购回答。"
-                ),
-            },
-        ],
+        messages=build_shopping_messages(query=query, cards=cards, memory=memory),
+        fallback=fallback,
+        client=client,
+    )
+
+
+def generate_decision_guide_result(
+    *,
+    query: str,
+    cards: list[dict],
+    memory: dict,
+    fallback: str,
+    client: ChatClient | None = None,
+) -> GenerationResult:
+    return _generate_result(
+        messages=build_decision_guide_messages(query=query, cards=cards, memory=memory),
         fallback=fallback,
         client=client,
     )
@@ -90,21 +92,8 @@ def generate_faq_result(
     fallback: str,
     client: ChatClient | None = None,
 ) -> GenerationResult:
-    context = "\n".join(hit.get("text", "") for hit in hits)
     return _generate_result(
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "你是电商售后与商品知识助手。"
-                    "必须基于检索上下文回答；如果上下文不足，要明确说明无法确认。"
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"用户问题：{query}\n检索上下文：\n{context}\n请给出准确、简洁的回答。",
-            },
-        ],
+        messages=build_faq_messages(query=query, hits=hits),
         fallback=fallback,
         client=client,
     )

@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Database,
@@ -17,14 +17,17 @@ import type { DebugEvent, UploadResult } from "../api/types";
 import { ChatMessage, type UiMessage } from "../components/ChatMessage";
 
 const examples = [
-  "帮我推荐 2000 以内适合学生记笔记和网课的平板",
+  "帮我推荐 3500 以内适合学生记笔记和网课的平板",
+  "帮我推荐 2000 以内适合上网课和通勤的降噪耳机",
+  "帮我推荐 300 以内适合通勤的鞋",
+  "帮我找 100 元以内控油定妆的粉饼或散粉",
+  "50 元以内有什么低糖或无糖饮品？",
   "退货政策是什么？",
-  "找类似这双鞋，但价格 300 以内，适合通勤",
-  "有没有更轻一点的？",
+  "兰蔻小黑瓶和资生堂红腰子，哪个更适合敏感肌修护维稳？",
 ];
 
 export function DebugConsole() {
-  const [message, setMessage] = useState(examples[0]);
+  const [message, setMessage] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [docStatus, setDocStatus] = useState("未导入文档");
@@ -51,9 +54,8 @@ export function DebugConsole() {
     scrollMessagesToBottom();
   }, [messages]);
 
-  async function handleSend(event: FormEvent) {
-    event.preventDefault();
-    const trimmed = message.trim();
+  async function submitMessage(nextMessage: string) {
+    const trimmed = nextMessage.trim();
     if (!trimmed || isStreaming) return;
     const assistantId = `pending_${Date.now()}`;
     setError("");
@@ -63,7 +65,7 @@ export function DebugConsole() {
     setMessages((current) => [
       ...current,
       { id: `user_${Date.now()}`, role: "user", content: trimmed, cards: [] },
-      { id: assistantId, role: "assistant", content: "", cards: [], pending: true },
+      { id: assistantId, role: "assistant", content: "", cards: [], comparison: null, pending: true },
     ]);
     scrollMessagesToBottom();
     setMessage("");
@@ -100,6 +102,14 @@ export function DebugConsole() {
             );
             scrollMessagesToBottom();
           }
+          if (debugEvent.event === "comparison") {
+            setMessages((current) =>
+              current.map((item) =>
+                item.id === assistantId || item.pending ? { ...item, comparison: debugEvent.data } : item
+              )
+            );
+            scrollMessagesToBottom();
+          }
           if (debugEvent.event === "trace") {
             setTrace(debugEvent.data);
           }
@@ -123,6 +133,18 @@ export function DebugConsole() {
       setIsStreaming(false);
       scrollMessagesToBottom();
     }
+  }
+
+  async function handleSend(event: FormEvent) {
+    event.preventDefault();
+    await submitMessage(message);
+  }
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    if (!message.trim() || isStreaming) return;
+    event.currentTarget.form?.requestSubmit();
   }
 
   async function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -243,7 +265,7 @@ export function DebugConsole() {
 
         <div className="examples">
           {examples.map((item) => (
-            <button key={item} onClick={() => setMessage(item)}>
+            <button key={item} disabled={isStreaming} onClick={() => void submitMessage(item)} title="点击直接发送">
               {item}
             </button>
           ))}
@@ -265,7 +287,7 @@ export function DebugConsole() {
         {error && <div className="error-banner">{error}</div>}
 
         <form className="composer" onSubmit={(event) => void handleSend(event)}>
-          <textarea value={message} onChange={(event) => setMessage(event.target.value)} />
+          <textarea value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={handleComposerKeyDown} />
           <button disabled={isStreaming || !message.trim()}>
             <Play size={18} /> Send
           </button>

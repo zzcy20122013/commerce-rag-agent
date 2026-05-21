@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.chitchat import chitchat_node
 from app.agents.compare import compare_node
+from app.agents.decision_guide import decision_guide_node
 from app.agents.faq import faq_node
 from app.agents.intent_router import classify_intent
 from app.agents.order import order_node
@@ -32,6 +33,8 @@ def router_node(state: AgentState) -> AgentState:
 
 def route_by_intent(state: AgentState) -> str:
     intent = state.get("intent")
+    if intent == "decision_guide":
+        return "decision_guide"
     if intent == "shopping_guide":
         return "shopping_guide"
     if intent == "product_knowledge":
@@ -62,6 +65,7 @@ def clarification_node(state: AgentState) -> AgentState:
 def create_agent_graph(db: Session, *, chroma_path: str | None = None):
     graph = StateGraph(AgentState)
     graph.add_node("intent_router", router_node)
+    graph.add_node("decision_guide", decision_guide_node(db))
     graph.add_node("shopping_guide", shopping_guide_node(db))
     graph.add_node("product_knowledge", product_knowledge_node(db))
     graph.add_node("compare", compare_node(db))
@@ -75,6 +79,7 @@ def create_agent_graph(db: Session, *, chroma_path: str | None = None):
         "intent_router",
         route_by_intent,
         {
+            "decision_guide": "decision_guide",
             "shopping_guide": "shopping_guide",
             "product_knowledge": "product_knowledge",
             "compare": "compare",
@@ -85,6 +90,7 @@ def create_agent_graph(db: Session, *, chroma_path: str | None = None):
             "chitchat": "chitchat",
         },
     )
+    graph.add_edge("decision_guide", END)
     graph.add_edge("shopping_guide", END)
     graph.add_edge("product_knowledge", END)
     graph.add_edge("compare", END)
