@@ -45,27 +45,30 @@ DOUBAO_MODEL=doubao-seed-2-0-lite-260428
 
 ## 启动
 
-后端：
+以下命令默认在仓库根目录执行。
+
+后端服务：
 
 ```powershell
 .\scripts\start_backend.cmd
 ```
 
-Web Debug：
+Web Debug 调试台：
 
 ```powershell
 .\scripts\start_web_debug.cmd
 ```
 
-默认后端地址是 `http://127.0.0.1:8000`，Web Debug 默认运行在 Vite 输出的本地地址。
+默认后端地址是 `http://127.0.0.1:8000`，Web Debug 默认运行在 Vite 输出的本地地址，用于查看 trace、Raw SSE、商品卡片和图搜调试信息。
 
-Android：
+Android 原生端：
 
 1. 打开 Android Studio。
-2. 选择 `C:\Users\zzcy2\Desktop\agent\android`。
-3. 启动 Pixel/Android 模拟器。
-4. 确认后端正在 `127.0.0.1:8000` 运行。
-5. 点击 Run。Android 代码里的后端地址是 `http://10.0.2.2:8000`，这是模拟器访问宿主机本地服务的地址。
+2. 选择本仓库下的 `android/` 目录。
+3. 启动 Pixel/Android 模拟器或连接 Android 真机。
+4. 确认后端正在 `http://127.0.0.1:8000` 运行。
+5. 点击 Run。模拟器内访问宿主机本地服务要使用 `http://10.0.2.2:8000`，项目已按这个地址配置。
+6. 如果使用真机，需要把 Android 端后端地址改成电脑局域网 IP，例如 `http://192.168.x.x:8000`，并确保手机和电脑在同一网络。
 
 ## 关键接口
 
