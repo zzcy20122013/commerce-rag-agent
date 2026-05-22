@@ -36,6 +36,7 @@
 | 正式移动端 | Android Kotlin + Jetpack Compose | 正式展示端，承载聊天、图片上传、商品卡片和反馈 |
 | API 后端 | Python FastAPI | 提供 HTTP API、SSE 流式接口、图片上传、商品/订单查询 |
 | Agent 编排 | LangGraph | 负责意图路由、Agent 流程编排、状态流转 |
+| 统一回复生成 | ResponseComposer + Doubao | 各业务模块产出事实后，统一生成真人导购口吻回复 |
 | RAG 检索层 | 当前自研 Chroma Retriever，后续可接入 LlamaIndex | 负责知识库索引、检索器封装、FAQ 与商品知识检索 |
 | 文本大模型 | Doubao-Seed-2.0-lite | 负责意图理解、约束提取、推荐理由生成、对比决策 |
 | 文本 Embedding | bge-m3 | 用于商品文本、FAQ、营销文档等中文/多语言语义检索 |
@@ -82,6 +83,7 @@ flowchart TD
     FAQ["FAQAgent<br/>售后/物流/支付 FAQ"]
     Order["OrderAgent<br/>订单查询"]
     Multi["MultimodalSearchAgent<br/>看图找相似款"]
+    Composer["ResponseComposer<br/>统一回复生成器"]
 
     Retrieval["Retrieval Layer<br/>Custom Chroma Retriever<br/>LlamaIndex 可选接入"]
     TextVec["Text Retrieval<br/>bge-m3 + Chroma"]
@@ -137,6 +139,12 @@ flowchart TD
     FAQ --> Retrieval
     Multi --> Retrieval
     Order --> SQLite
+    Guide --> Composer
+    Knowledge --> Composer
+    Compare --> Composer
+    FAQ --> Composer
+    Order --> Composer
+    Multi --> Composer
 
     Retrieval --> TextVec
     Retrieval --> DocsIndex
@@ -153,6 +161,7 @@ flowchart TD
     Files --> ImageVec
 
     Graph --> Doubao-Seed-2.0-lite
+    Composer --> Doubao-Seed-2.0-lite
 ```
 
 ## 5. 核心模块设计
@@ -170,6 +179,8 @@ Android 端是正式展示入口，重点体验是“像豆包一样的流式聊
 5. 点赞/点踩反馈。
 6. 会话历史列表。
 7. 商品详情跳转。
+8. 侧边栏新建会话和删除会话。
+9. SSE 异常收尾，避免一直停留在“正在思考”。
 
 关键页面：
 
@@ -179,6 +190,8 @@ Android 端是正式展示入口，重点体验是“像豆包一样的流式聊
 | 聊天页 | 文本输入、图片上传、流式回答、商品卡片 |
 | 商品详情页 | 展示商品参数、价格、库存、推荐理由 |
 | 反馈入口 | 对回答、商品推荐结果进行点赞或点踩 |
+
+当前工程状态：Android 原生端已完成第一版，可在 Android Studio 模拟器运行。模拟器访问本机后端使用 `http://10.0.2.2:8000`。
 
 ### 5.2 React 调试后台
 
@@ -273,6 +286,8 @@ FastAPI 是系统的统一服务入口。
 | `/api/products/{id}` | GET | 商品详情 |
 | `/api/orders/{id}` | GET | 查询订单状态 |
 | `/api/sessions` | GET/POST | 会话列表与新建会话 |
+| `/api/sessions/{id}/messages` | GET | 加载历史消息和对应商品卡片 |
+| `/api/sessions/{id}` | DELETE | 删除会话及其消息、推荐日志、检索日志和反馈记录 |
 | `/api/feedback` | POST | 点赞、点踩、反馈原因 |
 | `/api/debug/retrieval` | POST | 调试检索链路 |
 
@@ -292,6 +307,9 @@ LangGraph 负责把用户请求编排成可控的 Agent 流程。它不直接负
 | `OrderAgent` | 查询订单、物流、退货进度 |
 | `MultimodalSearchAgent` | 处理图片输入和“看图找类似款”需求 |
 | `ChitchatAgent` | 处理轻量闲聊，但保持导购身份 |
+| `ResponseComposer` | 统一最终回复口吻，不负责检索和业务决策 |
+
+说明：`ResponseComposer` 不应被理解为新的业务 Agent。它是最终表达层，接收各业务模块给出的事实、商品卡片、订单/FAQ/图搜结果和草稿回答，再由 Doubao 统一生成像真人导购的最终回复。若 LLM 调用失败，则保留业务模块原始 fallback，保证系统稳定。
 
 意图类型：
 
@@ -442,13 +460,13 @@ SSE 流中可以同时发送文本事件和卡片事件：
 
 ```text
 event: message
-data: {"delta":"我为你筛选了 3 款适合学生党的平板。"}
+data: {"content":"我为你筛选了 3 款适合学生党的平板。","message_id":"msg_xxx","session_id":"sess_xxx","memory":{},"feedback_enabled":true}
 
 event: product_cards
-data: {"cards":[...]}
+data: [...]
 
 event: done
-data: {"status":"ok"}
+data: {"ok":true}
 ```
 
 ## 6. 数据库设计
@@ -545,8 +563,9 @@ flowchart TD
     E --> F["SQLite 结构化过滤"]
     F --> G["bge-m3 + Chroma 语义召回"]
     G --> H["Rerank 综合排序"]
-    H --> I["Doubao-Seed-2.0-lite 生成导购回答"]
-    I --> J["SSE 流式返回文本"]
+    H --> I["业务 Agent 产出事实和草稿回答"]
+    I --> C2["ResponseComposer 统一导购表达"]
+    C2 --> J["SSE 流式返回文本"]
     H --> K["返回商品卡片 JSON"]
     K --> L["Android 渲染商品卡片"]
 ```
@@ -621,6 +640,7 @@ flowchart LR
 | 场景 | 降级策略 |
 | --- | --- |
 | Doubao-Seed-2.0-lite 超时 | 返回检索结果摘要，提示用户稍后重试 |
+| ResponseComposer 超时 | 保留业务 Agent 原始草稿回答，并在 trace 中记录 `llm_error` |
 | Chroma 检索失败 | 退回 SQLite 关键词过滤 |
 | 图片向量生成失败 | 提示重新上传图片，并允许转文本搜索 |
 | 没有找到商品 | 引导用户放宽预算、品牌、品类等条件 |
@@ -646,6 +666,7 @@ flowchart LR
 9. 实现 `/api/chat/stream` SSE 接口。
 10. 返回文本回答和商品卡片 JSON。
 11. 建立 React Web Debug 调试台，用于验证 SSE、Agent trace、商品卡片、图片上传和文档导入。
+12. 建立 ResponseComposer 统一回复生成器，让各业务模块最终表达保持一致。
 
 ### 第二阶段：真实平台简化数据层
 
@@ -681,7 +702,7 @@ flowchart LR
 
 内容：
 
-1. 接入真实 bge-m3 模型。
+1. 接入真实 Chinese-CLIP 模型。
 2. 为商品主图和详情图生成图片向量。
 3. 建立 `product_images` Chroma collection。
 4. 实现用户上传图片 embedding。
@@ -700,6 +721,7 @@ flowchart LR
 3. 实现 `OrderAgent`。
 4. 扩展意图路由样例和 fallback 逻辑。
 5. 完善检索日志、推荐日志和 Agent trace。
+6. 通过 ResponseComposer 统一对比、商品知识、订单、FAQ、图搜等路径的最终表达。
 
 ### 第六阶段：Android 展示端
 
@@ -713,6 +735,8 @@ flowchart LR
 4. 图片上传组件。
 5. 会话历史。
 6. 点赞/点踩反馈。
+7. 侧边栏新建/删除会话。
+8. SSE 错误收尾和移动端异常提示。
 
 ### 第七阶段：路演展示界面
 

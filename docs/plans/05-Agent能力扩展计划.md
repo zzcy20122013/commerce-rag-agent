@@ -6,11 +6,11 @@
 
 ## 当前完成状态
 
-状态：核心能力已完成第三版，已适配 100 条真实商品数据集，并完成导购 Prompt 统一管理。当前不再优先新增 Agent 数量，而是优先补强已有 Agent 的导购表达、约束继承、推荐取舍和评测稳定性。
+状态：核心能力已完成第四版，已适配 100 条真实商品数据集，并完成导购 Prompt 统一管理与 ResponseComposer 统一回复生成。当前不再优先新增 Agent 数量，而是优先补强已有 Agent 的事实输出、统一表达、多轮继承、推荐取舍和评测稳定性。
 
 当前补强重点：
 
-1. 让回答更像真人导购：先确认需求重点，再给明确倾向，避免写成检索报告。
+1. 让回答更像真人导购：业务 Agent 给事实，ResponseComposer 统一生成自然表达，避免每个 Agent 各说各话。
 2. 强化主推、备选和劝退：不要平均介绍所有商品，要说明适合谁、不适合谁。
 3. 统一预算不匹配话术：`no_exact_match=true` 时必须说明没有严格符合条件的商品，再给“可加预算考虑”或“退一步可选”。
 4. 提升多轮继承：第二轮追问要继承上一轮预算、品类、用途和偏好。
@@ -134,6 +134,20 @@
    - 将通用导购人格、事实约束、预算规则、输出结构与 Agent 专属任务拆分管理
    - `generation.py` 只负责调用 LLM，不再直接维护大段 prompt
 
+15. ResponseComposer
+   - 文件：`backend/app/agents/response_composer.py`
+   - 不是新的业务 Agent，而是统一回复生成器
+   - 接收用户问题、意图、业务模块草稿回答、商品卡片、用户约束、检索结果和对比数据
+   - 优先调用 Doubao 生成最终给用户看的真人导购口吻回复
+   - LLM 失败时保留原业务模块草稿回答，保证系统稳定
+   - 已接入 `/api/chat/stream` 的最终出口，所有用户可见自然语言回复都会经过统一表达层
+
+16. Chitchat LLM 化
+   - 文件：`backend/app/agents/chitchat.py`
+   - 闲聊、打招呼、感谢等轻量对话已改为 Doubao 优先
+   - 失败时才使用本地 fallback 文案
+   - 反馈按钮不会在闲聊回答下显示
+
 ## 验证用例
 
 已本地验证：
@@ -185,11 +199,23 @@
    - 路由：`compare`
    - Web Debug 可展示对比表格
 
+11. `你好`
+   - 路由：`chitchat`
+   - Chitchat 调用 Doubao 生成自然短回复
+   - ResponseComposer 再统一最终表达
+   - 不显示点赞/点踩
+
+12. 任意业务回答
+   - trace 中应出现：`response_composer`
+   - 如果 `response_composer.llm_enabled=true`，说明最终回复经过统一表达层
+   - 如果 LLM 失败，则保留原回答并在 trace 中记录 `llm_error`
+
 ## 后续可增强
 
 1. OrderAgent 后续可替换为真实订单/物流 API。
 2. 多轮记忆后续可持久化为更结构化的会话状态，而不是只从最近 assistant message 读取 memory。
 3. 扩充 Plan 08 评测集，验证意图路由准确率、多轮约束继承准确率、严格筛选正确率和导购回答稳定性。
-4. 将 Prompt Registry 引入版本号，例如 `shopping_guide_v1.1`，方便后续评测对比。
+4. 将 Prompt Registry 和 ResponseComposer 引入版本号，例如 `response_composer_v1.1`，方便后续评测对比。
 5. 图搜 Agent 后续可接入更完整的图片 query 改写与跨模态 rerank 策略。
 6. 针对“像真人导购”建立回答样例库，沉淀推荐、对比、劝退、追问、无严格匹配等高频话术模板。
+7. 后续可把 `Compare / ProductKnowledge / DecisionGuide` 的自然语言生成进一步收敛为结构化事实输出，让 ResponseComposer 完全负责最终表达。

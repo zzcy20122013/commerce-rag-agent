@@ -10,6 +10,33 @@
 
 ---
 
+## 0. 当前完成状态
+
+状态：核心展示端已完成第一版，可在 Android Studio 模拟器运行，后续重点转为 UI 体验打磨和真机验证。
+
+已完成：
+
+1. Android Studio 工程可打开和构建。
+2. 登录页：`ui/auth/LoginScreen.kt`。
+3. 主容器和侧边栏：`ui/main/MainScreen.kt`。
+4. 聊天页：`ui/chat/ChatScreen.kt`。
+5. SSE 客户端：`data/api/ChatSseClient.kt`。
+6. 商品卡片：`ui/chat/ProductCardRow.kt`。
+7. 图片上传入口和预览。
+8. 赞踩反馈入口，按后端 `feedback_enabled` 控制显示。
+9. 会话列表、新建会话、历史消息加载。
+10. 真实删除会话，调用 `DELETE /api/sessions/{id}`。
+11. SSE 错误收尾：失败时不再无限显示“正在思考...”，而是显示错误提示。
+12. Android 模拟器访问本机后端：`http://10.0.2.2:8000`。
+
+待继续打磨：
+
+1. UI 视觉继续贴近正式智能导购 App。
+2. 消息滚动、输入框、键盘遮挡、侧边栏交互细节。
+3. 商品卡片在移动端的纵向/横向展示策略。
+4. 图片上传后的多模态结果展示。
+5. 真机测试和不同屏幕尺寸适配。
+
 ## 1. 范围
 
 包含：
@@ -81,23 +108,28 @@ Android 需要解析后端 SSE：
 
 ```text
 event: message
-data: {"delta":"我为你筛选了 3 款适合学生党的平板。"}
+data: {"content":"我为你筛选了 3 款适合学生党的平板。","message_id":"msg_xxx","session_id":"sess_xxx","memory":{},"feedback_enabled":true}
 
 event: product_cards
-data: {"cards":[...]}
+data: [...]
 
 event: trace
-data: {"intent":"shopping_guide","filters":{"budget_max":2000}}
+data: [{"node":"intent_router","intent":"shopping_guide"},{"node":"response_composer","llm_enabled":true}]
 
 event: done
-data: {"status":"ok"}
+data: {"ok":true}
 ```
 
 解析为：
 
 ```kotlin
 sealed interface SseEvent {
-    data class Message(val delta: String) : SseEvent
+    data class Message(
+        val delta: String,
+        val messageId: String?,
+        val sessionId: String?,
+        val feedbackEnabled: Boolean
+    ) : SseEvent
     data class ProductCards(val cards: List<ProductCard>) : SseEvent
     data class Trace(val payload: String) : SseEvent
     data class Error(val message: String) : SseEvent
@@ -163,6 +195,7 @@ sealed interface SseEvent {
 - [ ] 收到 `ProductCards` 时绑定到 assistant message。
 - [ ] 收到 `Done` 时将 `isStreaming=false`。
 - [ ] 失败时显示重试按钮状态。
+- [x] 失败时收尾当前 assistant 消息，避免一直停留在“正在思考...”。
 
 ### Task 5: 聊天页面
 
@@ -209,6 +242,7 @@ sealed interface SseEvent {
 - [ ] 点踩发送 `rating=-1`。
 - [ ] 反馈提交后锁定按钮。
 - [ ] 失败时允许再次点击。
+- [x] 根据后端 `feedback_enabled` 控制显示，闲聊和无效兜底回答不展示赞踩。
 
 ### Task 8: 商品详情页
 
@@ -240,3 +274,5 @@ Android 开发前，后端需要稳定提供：
 - `GET /api/products/{id}`
 - `GET /api/sessions`
 - `POST /api/sessions`
+- `GET /api/sessions/{id}/messages`
+- `DELETE /api/sessions/{id}`
