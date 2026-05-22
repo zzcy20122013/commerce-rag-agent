@@ -36,7 +36,7 @@
 | 正式移动端 | Android Kotlin + Jetpack Compose | 正式展示端，承载聊天、图片上传、商品卡片和反馈 |
 | API 后端 | Python FastAPI | 提供 HTTP API、SSE 流式接口、图片上传、商品/订单查询 |
 | Agent 编排 | LangGraph | 负责意图路由、Agent 流程编排、状态流转 |
-| RAG 框架 | LlamaIndex | 负责知识库索引、检索器封装、FAQ 与商品知识检索 |
+| RAG 检索层 | 当前自研 Chroma Retriever，后续可接入 LlamaIndex | 负责知识库索引、检索器封装、FAQ 与商品知识检索 |
 | 文本大模型 | Doubao-Seed-2.0-lite | 负责意图理解、约束提取、推荐理由生成、对比决策 |
 | 文本 Embedding | bge-m3 | 用于商品文本、FAQ、营销文档等中文/多语言语义检索 |
 | 图片 Embedding | Chinese-CLIP | 用于商品图像向量化和看图找相似商品 |
@@ -49,9 +49,9 @@
 
 架构原则：
 
-> FastAPI 管服务边界，LangGraph 管 Agent 流程，LlamaIndex 管 RAG 检索，SQLite 和 Chroma 管数据。
+> FastAPI 管服务边界，LangGraph 管 Agent 流程，当前自研 Chroma Retriever 管 RAG 检索，SQLite 和 Chroma 管数据。
 
-补充说明：LlamaIndex 作为检索封装层使用，底层向量存储仍采用 Chroma；文本 embedding 由 bge-m3 提供，图片 embedding 由 Chinese-CLIP 提供。
+补充说明：理想蓝图中可以引入 LlamaIndex 作为更标准的检索封装层；当前实现优先采用自研 Chroma retriever 跑通商品文本、FAQ、营销文档和图片索引。底层向量存储仍采用 Chroma；文本 embedding 由 bge-m3 提供，图片 embedding 由 Chinese-CLIP 提供。
 
 面向理想状态，系统还需要引入“真实电商平台简化版数据层”：使用商品导入管道模拟商品中台，使用本地文件目录模拟对象存储/CDN，使用索引构建任务将商品文本、知识文档和商品图片同步到 SQLite 与 Chroma，从而让 Agent 不依赖少量写死样例，而是面向可扩展的商品库和知识库工作。
 
@@ -83,7 +83,7 @@ flowchart TD
     Order["OrderAgent<br/>订单查询"]
     Multi["MultimodalSearchAgent<br/>看图找相似款"]
 
-    Retrieval["Retrieval Layer<br/>LlamaIndex + Custom Retriever"]
+    Retrieval["Retrieval Layer<br/>Custom Chroma Retriever<br/>LlamaIndex 可选接入"]
     TextVec["Text Retrieval<br/>bge-m3 + Chroma"]
     DocsIndex["Docs Ingestion<br/>文档解析 / Chunk / Metadata"]
     ImageVec["Image Retrieval<br/>Chinese-CLIP + Chroma"]
@@ -308,7 +308,7 @@ LangGraph 负责把用户请求编排成可控的 Agent 流程。它不直接负
 
 ### 5.7 RAG 检索层
 
-RAG 检索层由 LlamaIndex、bge-m3、Chroma 和 SQLite 组成。
+RAG 检索层当前由自研 Chroma retriever、bge-m3、Chroma 和 SQLite 组成；后续可在接口稳定后接入 LlamaIndex 作为检索编排与文档索引封装层。
 
 文本知识来源：
 
@@ -813,7 +813,7 @@ agent/
 
 ## 12. 方案总结
 
-本项目以 Android 移动端体验为核心，以 FastAPI 作为统一后端入口，以 LangGraph 组织多 Agent 流程，以 LlamaIndex + Chroma 承载 RAG 检索，以 bge-m3 支持文本向量检索，以 Chinese-CLIP 支持图片向量检索。
+本项目以 Android 移动端体验为核心，以 FastAPI 作为统一后端入口，以 LangGraph 组织多 Agent 流程，以自研 Chroma retriever 承载当前 RAG 检索，以 bge-m3 支持文本向量检索，以 Chinese-CLIP 支持图片向量检索；LlamaIndex 保留为后续可接入的标准化检索封装方向。
 
 第一版系统应优先实现“文本导购推荐 + 商品卡片 + SSE 流式展示”的闭环。随后需要补齐真实平台简化数据层，让商品、图片、文档和索引能够批量导入、重建和评测。再逐步完善真实 bge-m3 文本向量和 Chinese-CLIP 图片向量、图片找同款、对比决策、订单查询、反馈评测、Docker 化和数据库升级。
 

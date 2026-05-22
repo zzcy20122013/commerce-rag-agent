@@ -8,24 +8,25 @@ type ComparisonTableProps = {
 
 export function ComparisonTable({ comparison }: ComparisonTableProps) {
   if (!comparison || comparison.items.length === 0) return null;
+  const winner = comparison.items.find((item) => item.product_id === comparison.winner_product_id);
 
   const gridStyle = {
     "--comparison-columns": comparison.items.length,
   } as CSSProperties;
 
   return (
-    <section className="comparison-panel" aria-label="商品对比">
-      <div className="comparison-header">
+    <details className="comparison-panel" aria-label="商品对比">
+      <summary className="comparison-header">
         <div>
-          <span className="comparison-kicker">Decision Matrix</span>
-          <strong>{comparison.title || "商品对比"}</strong>
+          <span className="comparison-kicker">可展开查看</span>
+          <strong>{comparison.title || "商品对比细节"}</strong>
         </div>
-        {comparison.winner_product_id && (
+        {winner && (
           <span className="winner-pill">
-            <Trophy size={14} /> 推荐 {comparison.winner_product_id}
+            <Trophy size={14} /> 更建议 {winner.title}
           </span>
         )}
-      </div>
+      </summary>
 
       {comparison.winner_reason && <p className="comparison-reason">{comparison.winner_reason}</p>}
 
@@ -52,7 +53,7 @@ export function ComparisonTable({ comparison }: ComparisonTableProps) {
         <ComparisonRow label="适用建议" values={comparison.items.map((item) => item.best_for || "结合预算和偏好选择")} />
         <ComparisonRow label="证据" values={comparison.items.map((item) => item.evidence || "来自商品结构化信息")} />
       </div>
-    </section>
+    </details>
   );
 }
 

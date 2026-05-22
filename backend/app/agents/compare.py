@@ -1,4 +1,5 @@
 import json
+import re
 
 from sqlalchemy.orm import Session
 
@@ -52,25 +53,40 @@ def compare_node(db: Session):
 
 def build_compare_answer(products, *, query: str = "", docs_by_product: dict | None = None) -> str:
     docs_by_product = docs_by_product or {}
-    lines = ["我按价格、参数、场景和综合口碑做了对比："]
-    for product in products:
-        specs = _safe_json(product.specs_json)
-        spec_text = "、".join(f"{key}: {value}" for key, value in specs.items()) if specs else "参数较少"
-        evidence = _evidence_summary(query, docs_by_product.get(product.id, []))
-        lines.append(
-            f"- {product.title}：{product.price} 元，评分 {product.rating}，销量 {product.sales}，{spec_text}。{product.description}{evidence}"
-        )
     best_match = _best_match_for_query(products, query, docs_by_product)
     cheapest = min(products, key=lambda product: product.price)
-    if best_match:
-        lines.append(f"结论：如果优先满足你这次提到的需求，我更建议 {best_match.title}。想省钱则优先看 {cheapest.title}。")
-    else:
-        best_rated = max(products, key=lambda product: product.rating)
-        if cheapest.id == best_rated.id:
-            lines.append(f"结论：优先选 {cheapest.title}，它同时兼顾价格和评分。")
+    winner = best_match or cheapest
+    keywords = _query_keywords(query)
+    focus = "、".join(keywords[:3]) if keywords else "你这次提到的重点"
+    lines = [
+        f"你主要是在看{focus}，这几款里我会优先选 {winner.title}。"
+    ]
+
+    ordered_products = _ordered_compare_products(products, winner, cheapest)
+    for product in ordered_products[:3]:
+        if product.id == winner.id:
+            role = "主推"
+        elif product.id == cheapest.id:
+            role = "省钱备选"
         else:
-            lines.append(f"结论：想省钱选 {cheapest.title}；更看重综合体验选 {best_rated.title}。")
+            role = "不太建议优先选"
+        lines.append(f"{role}：{product.title}，{product.price} 元。{_human_compare_reason(product, query, docs_by_product.get(product.id, []), cheapest)}")
+
+    if cheapest.id != winner.id:
+        lines.append(f"如果你更在意少花钱，可以退一步看 {cheapest.title}；但如果重点是{focus}，我还是更建议 {winner.title}。")
+    else:
+        lines.append(f"我的建议是先看 {winner.title}，它在价格和需求匹配上更稳。")
     return "\n".join(lines)
+
+
+def _ordered_compare_products(products, winner, cheapest):
+    ordered = []
+    seen = set()
+    for product in [winner, cheapest, *products]:
+        if product and product.id not in seen:
+            ordered.append(product)
+            seen.add(product.id)
+    return ordered
 
 
 def build_comparison_payload(products, *, query: str = "", docs_by_product: dict | None = None) -> dict:
@@ -124,8 +140,8 @@ def _best_match_for_query(products, query: str, docs_by_product: dict) -> object
             ]
         )
         score = sum(1 for keyword in keywords if keyword in haystack)
-        scored.append((score, product))
-    best_score, best_product = max(scored, key=lambda item: item[0])
+        scored.append((score, product.rating or 0, product.sales or 0, -product.price, product))
+    best_score, _, _, _, best_product = max(scored, key=lambda item: item[:4])
     return best_product if best_score > 0 else None
 
 
@@ -134,8 +150,38 @@ def _evidence_summary(query: str, docs: list[dict]) -> str:
     for doc in docs:
         text = doc.get("text", "")
         if any(keyword in text for keyword in keywords):
-            return f" 证据：{text.replace(chr(10), ' ')[:160]}"
+            return _clean_evidence_text(text)[:160]
     return ""
+
+
+def _human_compare_reason(product, query: str, docs: list[dict], cheapest) -> str:
+    keywords = _query_keywords(query)
+    matched = _matched_keywords(product, keywords, docs)
+    points = []
+    if matched:
+        points.append(f"更贴合你提到的{'、'.join(matched[:2])}")
+    if product.id == cheapest.id:
+        points.append("价格压力最小")
+    if product.rating and product.rating < 3.5:
+        points.append("但评分不算突出，建议下单前重点看差评")
+    elif product.rating:
+        points.append(f"评分 {product.rating}，口碑更稳")
+    if not matched and product.description:
+        points.append(_short_text(product.description, limit=32))
+    return "；".join(points[:3]) + "。"
+
+
+def _clean_evidence_text(text: str) -> str:
+    cleaned = re.sub(r"商品ID：\S+", "", text)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()
+
+
+def _short_text(text: str, *, limit: int) -> str:
+    compact = re.sub(r"\s+", " ", text).strip()
+    if len(compact) <= limit:
+        return compact
+    return compact[:limit].rstrip("，。；、 ") + "..."
 
 
 def _query_keywords(query: str) -> list[str]:

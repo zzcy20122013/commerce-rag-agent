@@ -4,9 +4,9 @@
 
 **Goal:** 构建第一版可演示闭环：用户输入购物需求，后端通过 RAG 和 Agent 检索商品并用 SSE 返回导购回答与商品卡片。
 
-**Architecture:** 第一阶段只做文本导购，不接图片检索和 Android。FastAPI 提供服务边界，LangGraph 编排 IntentRouter 与 ShoppingGuide，LlamaIndex + Chroma 负责文本检索，SQLite 存商品、会话、消息、反馈和日志。
+**Architecture:** 第一阶段只做文本导购，不接图片检索和 Android。FastAPI 提供服务边界，LangGraph 编排 IntentRouter 与 ShoppingGuide，当前采用自研 Chroma retriever 负责文本检索，SQLite 存商品、会话、消息、反馈和日志；LlamaIndex 保留为后续可接入方向。
 
-**Tech Stack:** Python FastAPI, LangGraph, LlamaIndex, Chroma, SQLite, SQLAlchemy, bge-m3, Chinese-CLIP, Doubao-Seed-2.0-lite, SSE, React + Vite debug UI.
+**Tech Stack:** Python FastAPI, LangGraph, Custom Chroma Retriever, Chroma, SQLite, SQLAlchemy, bge-m3, Chinese-CLIP, Doubao-Seed-2.0-lite, SSE, React + Vite debug UI.
 
 ---
 
@@ -22,7 +22,7 @@
 - Doubao-Seed-2.0-lite client
 - bge-m3 文本 embedding
 - Chroma 文本向量库
-- LlamaIndex 商品与 FAQ 检索
+- 自研 Chroma retriever 商品与 FAQ 检索，后续可接入 LlamaIndex
 - `.md`、`.txt`、`.csv` 非结构化文档导入
 - LangGraph Agent 主流程
 - 会话记忆与多轮约束继承

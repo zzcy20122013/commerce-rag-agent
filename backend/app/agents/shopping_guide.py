@@ -16,6 +16,8 @@ MEMORY_FIELDS = [
     "preferences",
     "product_ids",
     "strict_filter",
+    "last_product_ids",
+    "exclude_product_ids",
 ]
 
 
@@ -30,6 +32,29 @@ def shopping_guide_node(db: Session):
             subcategory=memory.get("subcategory"),
             budget_max=memory.get("budget_max"),
         )
+        alternative_products = exclude_previous_products(products, memory)
+        if memory.get("exclude_product_ids") and not alternative_products:
+            cards: list[dict] = []
+            answer = build_no_more_options_answer(memory)
+            trace_item = {
+                "node": "shopping_guide",
+                "cards": [],
+                "llm_enabled": False,
+                "retrieval_mode": "sqlite_filter_no_new_alternatives",
+                "sqlite_candidates": len(products),
+                "excluded_product_ids": memory.get("exclude_product_ids", []),
+            }
+            return {
+                **state,
+                "constraints": constraints,
+                "memory": {**memory, "exclude_product_ids": []},
+                "retrieved_items": [],
+                "product_cards": cards,
+                "no_exact_match": False,
+                "answer": answer,
+                "trace": state.get("trace", []) + [trace_item],
+            }
+        products = alternative_products
         if not products and memory.get("strict_filter"):
             cards: list[dict] = []
             answer = build_recommendation_answer(cards, memory, strict_no_match=True)
@@ -120,7 +145,18 @@ def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
         _append_preference(memory, "修护维稳")
     if any(word in lowered for word in ["保湿", "补水"]):
         _append_preference(memory, "保湿")
+    if _asks_for_more_options(query):
+        memory["exclude_product_ids"] = previous.get("last_product_ids", [])
+    else:
+        memory.pop("exclude_product_ids", None)
     return memory
+
+
+def exclude_previous_products(products: list[Product], memory: dict) -> list[Product]:
+    excluded = set(memory.get("exclude_product_ids") or [])
+    if not excluded:
+        return products
+    return [product for product in products if product.id not in excluded]
 
 
 def sort_products_for_memory(products: list[Product], memory: dict, query: str = "") -> list[Product]:
@@ -281,8 +317,8 @@ def build_recommendation_answer(
             budget = f"{memory['budget_max']} 元以内" if memory.get("budget_max") else "当前条件"
             return (
                 f"我这边没有找到严格符合“{budget}、{category}”的现货商品。"
-                "这种问法更像条件筛选，我不会把超预算或不相关的商品硬塞给你。"
-                "你可以把预算放宽一点，或者换成相邻品类再查。"
+                "更建议你先别硬买超预算或不相关的款，容易花了钱还不合适。"
+                "如果预算卡死，可以换成相邻品类再查；如果能调整预算，我建议先把预算放宽一点再选。"
             )
         return "我暂时没有找到完全符合条件的商品，可以放宽预算或换一个品类再试。"
     category = memory.get("category") or "商品"
@@ -315,9 +351,26 @@ def build_recommendation_answer(
     )
 
 
+def build_no_more_options_answer(memory: dict) -> str:
+    category = memory.get("subcategory") or memory.get("category") or "这个品类"
+    budget = f"{memory['budget_max']} 元以内" if memory.get("budget_max") else "当前条件下"
+    focus_items = [*memory.get("use_cases", []), *memory.get("preferences", [])]
+    focus = "、".join(focus_items[:2]) if focus_items else "你的核心需求"
+    return (
+        f"我又帮你往下找了一圈，{budget}适合你的{category}选择确实不多。"
+        f"刚才给你看的那几款已经算比较稳了，再硬找的话，要么会超预算比较多，要么就不太贴合{focus}。"
+        "如果你想继续扩，我建议先放宽一个条件，比如预算、品牌、规格或使用场景。"
+    )
+
+
 def _asks_for_broad_category(query: str) -> bool:
     lowered = query.lower()
     return any(keyword in lowered for keyword in ["都有什么", "有哪些", "电子产品", "数码产品", "全部"])
+
+
+def _asks_for_more_options(query: str) -> bool:
+    lowered = query.lower()
+    return any(keyword in lowered for keyword in ["还有", "其他", "别的", "换一批", "换个", "再推荐", "再找"])
 
 
 def _append_preference(memory: dict, value: str) -> None:

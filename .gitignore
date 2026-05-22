@@ -32,6 +32,7 @@ local.properties
 *.iml
 
 # Runtime data
+outputs/
 *.db
 *.sqlite
 *.sqlite3

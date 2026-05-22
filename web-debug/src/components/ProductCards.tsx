@@ -11,10 +11,11 @@ export function ProductCards({ cards }: ProductCardsProps) {
   if (!cards.length) return null;
   return (
     <div className="product-strip">
-      {cards.map((card) => (
-        <article className="product-card" key={card.product_id}>
+      {cards.map((card, index) => (
+        <article className={`product-card ${index === 0 ? "primary" : ""}`} key={card.product_id}>
           <ProductImage imageUrl={card.image_url} title={card.title} />
           <div className="product-body">
+            <div className="product-role">{cardRoleLabel(index)}</div>
             <div className="product-title">{card.title}</div>
             <div className="product-subtitle">{card.subtitle}</div>
             <div className="product-meta">
@@ -34,6 +35,12 @@ export function ProductCards({ cards }: ProductCardsProps) {
       ))}
     </div>
   );
+}
+
+function cardRoleLabel(index: number) {
+  if (index === 0) return "主推";
+  if (index === 1) return "备选";
+  return "再看看";
 }
 
 function ProductImage({ imageUrl, title }: { imageUrl: string; title: string }) {
