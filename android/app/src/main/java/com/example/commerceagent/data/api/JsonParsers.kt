@@ -3,6 +3,7 @@ package com.example.commerceagent.data.api
 import com.example.commerceagent.data.model.ProductCard
 import com.example.commerceagent.data.model.ProductDetail
 import com.example.commerceagent.data.model.Session
+import com.example.commerceagent.data.model.SessionMessage
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -43,5 +44,16 @@ fun JSONObject.toSession(): Session {
         id = optString("id"),
         title = optString("title"),
         updatedAt = optString("updatedAt")
+    )
+}
+
+fun JSONObject.toSessionMessage(): SessionMessage {
+    val cardsJson = optJSONArray("productCards") ?: JSONArray()
+    return SessionMessage(
+        id = optString("id"),
+        role = optString("role"),
+        content = optString("content"),
+        createdAt = optString("createdAt"),
+        productCards = List(cardsJson.length()) { index -> cardsJson.getJSONObject(index).toProductCard() }
     )
 }

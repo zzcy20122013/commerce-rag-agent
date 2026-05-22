@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.models.db import get_db, init_db
-from app.services.session_service import ensure_session, list_sessions
+from app.models.tables import ChatSession
+from app.services.session_service import delete_session, ensure_session, list_session_messages, list_sessions
 
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -38,3 +39,19 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         "title": session.title,
         "updatedAt": session.updated_at.isoformat(),
     }
+
+
+@router.get("/{session_id}/messages")
+def get_session_messages(session_id: str, db: Session = Depends(get_db)) -> list[dict]:
+    init_db()
+    if not db.get(ChatSession, session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return list_session_messages(db, session_id=session_id)
+
+
+@router.delete("/{session_id}")
+def remove_session(session_id: str, db: Session = Depends(get_db)) -> dict:
+    init_db()
+    if not delete_session(db, session_id=session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True, "session_id": session_id}

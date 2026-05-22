@@ -1,6 +1,7 @@
 package com.example.commerceagent.data.api
 
 import com.example.commerceagent.data.model.Session
+import com.example.commerceagent.data.model.SessionMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -37,6 +38,28 @@ class SessionApi(
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("会话创建失败：${response.code}")
             JSONObject(response.body?.string().orEmpty()).toSession()
+        }
+    }
+
+    suspend fun listMessages(sessionId: String): List<SessionMessage> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("${ApiConfig.BASE_URL}/api/sessions/$sessionId/messages")
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("历史消息加载失败：${response.code}")
+            val array = JSONArray(response.body?.string().orEmpty())
+            List(array.length()) { index -> array.getJSONObject(index).toSessionMessage() }
+        }
+    }
+
+    suspend fun deleteSession(sessionId: String) = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("${ApiConfig.BASE_URL}/api/sessions/$sessionId")
+            .delete()
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("会话删除失败：${response.code}")
         }
     }
 }

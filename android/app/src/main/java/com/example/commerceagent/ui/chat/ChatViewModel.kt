@@ -10,6 +10,8 @@ import com.example.commerceagent.data.model.MessageRole
 import com.example.commerceagent.data.model.SseEvent
 import com.example.commerceagent.data.repository.ChatRepository
 import com.example.commerceagent.data.repository.FeedbackRepository
+import com.example.commerceagent.data.repository.SessionRepository
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,13 +31,39 @@ data class ChatUiState(
 class ChatViewModel(
     private val repository: ChatRepository = ChatRepository(),
     private val uploadApi: UploadApi = UploadApi(),
-    private val feedbackRepository: FeedbackRepository = FeedbackRepository()
+    private val feedbackRepository: FeedbackRepository = FeedbackRepository(),
+    private val sessionRepository: SessionRepository = SessionRepository()
 ) : ViewModel() {
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     fun setSession(sessionId: String?) {
-        _state.value = _state.value.copy(sessionId = sessionId)
+        if (_state.value.sessionId == sessionId) return
+        _state.value = ChatUiState(sessionId = sessionId, isSending = sessionId != null)
+        if (sessionId == null) return
+        viewModelScope.launch {
+            runCatching { sessionRepository.listMessages(sessionId) }
+                .onSuccess { history ->
+                    _state.value = _state.value.copy(
+                        messages = history.map {
+                            ChatMessage(
+                                id = it.id,
+                                role = if (it.role == "user") MessageRole.User else MessageRole.Assistant,
+                                content = it.content,
+                                productCards = it.productCards,
+                                feedbackEnabled = it.productCards.isNotEmpty()
+                            )
+                        },
+                        isSending = false,
+                        error = null
+                    )
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message, isSending = false) }
+        }
+    }
+
+    fun startNewChat() {
+        _state.value = ChatUiState()
     }
 
     fun updateInput(value: String) {
@@ -70,18 +98,24 @@ class ChatViewModel(
             error = null
         )
         viewModelScope.launch {
-            repository.streamChat(text, state.value.sessionId, state.value.uploadId).collect { event ->
-                when (event) {
-                    is SseEvent.Message -> applyAssistantText(assistantTempId, event)
-                    is SseEvent.ProductCards -> updateAssistant(assistantTempId) { it.copy(productCards = event.cards) }
-                    is SseEvent.Trace -> Unit
-                    is SseEvent.Error -> _state.value = _state.value.copy(error = event.message, isSending = false)
-                    SseEvent.Done -> {
-                        updateAssistant(assistantTempId) { it.copy(isStreaming = false) }
-                        _state.value = _state.value.copy(isSending = false, uploadId = null, previewUrl = null)
+            repository.streamChat(text, state.value.sessionId, state.value.uploadId)
+                .catch { error ->
+                    failAssistant(assistantTempId, error.message ?: "网络异常，请稍后再试。")
+                }
+                .collect { event ->
+                    when (event) {
+                        is SseEvent.Message -> applyAssistantText(assistantTempId, event)
+                        is SseEvent.ProductCards -> updateAssistant(assistantTempId) {
+                            it.copy(productCards = event.cards, feedbackEnabled = it.feedbackEnabled || event.cards.isNotEmpty())
+                        }
+                        is SseEvent.Trace -> Unit
+                        is SseEvent.Error -> failAssistant(assistantTempId, event.message)
+                        SseEvent.Done -> {
+                            updateAssistant(assistantTempId) { it.copy(isStreaming = false) }
+                            _state.value = _state.value.copy(isSending = false, uploadId = null, previewUrl = null)
+                        }
                     }
                 }
-            }
         }
     }
 
@@ -98,7 +132,15 @@ class ChatViewModel(
         _state.value = _state.value.copy(
             sessionId = event.sessionId ?: _state.value.sessionId,
             messages = _state.value.messages.map {
-                if (it.id == tempId) it.copy(id = resolvedId, content = it.content + event.delta) else it
+                if (it.id == tempId) {
+                    it.copy(
+                        id = resolvedId,
+                        content = it.content + event.delta,
+                        feedbackEnabled = it.feedbackEnabled || event.feedbackEnabled
+                    )
+                } else {
+                    it
+                }
             }
         )
     }
@@ -109,5 +151,16 @@ class ChatViewModel(
                 if (message.id == messageId || message.role == MessageRole.Assistant && message.isStreaming) block(message) else message
             }
         )
+    }
+
+    private fun failAssistant(messageId: String, message: String) {
+        updateAssistant(messageId) {
+            it.copy(
+                content = "这次请求没成功：$message",
+                isStreaming = false,
+                feedbackEnabled = false
+            )
+        }
+        _state.value = _state.value.copy(isSending = false, error = message)
     }
 }

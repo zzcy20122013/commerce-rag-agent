@@ -68,7 +68,8 @@ class ChatSseClient(
                 SseEvent.Message(
                     delta = json.optString("content"),
                     messageId = json.optString("message_id").takeIf { it.isNotBlank() },
-                    sessionId = json.optString("session_id").takeIf { it.isNotBlank() }
+                    sessionId = json.optString("session_id").takeIf { it.isNotBlank() },
+                    feedbackEnabled = json.optBoolean("feedback_enabled", false)
                 )
             }
             "product_cards" -> {

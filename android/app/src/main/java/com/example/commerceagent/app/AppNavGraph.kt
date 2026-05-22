@@ -6,28 +6,31 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.commerceagent.ui.chat.ChatScreen
+import com.example.commerceagent.ui.auth.LoginScreen
+import com.example.commerceagent.ui.main.MainScreen
 import com.example.commerceagent.ui.product.ProductDetailScreen
-import com.example.commerceagent.ui.sessions.SessionListScreen
 
 @Composable
 fun AppNavGraph() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = "sessions") {
-        composable("sessions") {
-            SessionListScreen(
-                onOpenChat = { sessionId -> navController.navigate("chat/$sessionId") },
-                onNewChat = { navController.navigate("chat/new") }
+    NavHost(navController = navController, startDestination = "login") {
+        composable("login") {
+            LoginScreen(
+                onLoginSuccess = {
+                    navController.navigate("main") {
+                        popUpTo("login") { inclusive = true }
+                    }
+                }
             )
         }
-        composable(
-            route = "chat/{sessionId}",
-            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
-        ) {
-            ChatScreen(
-                sessionId = it.arguments?.getString("sessionId")?.takeUnless { id -> id == "new" },
+        composable("main") {
+            MainScreen(
                 onOpenProduct = { productId -> navController.navigate("product/$productId") },
-                onBack = { navController.popBackStack() }
+                onLogout = {
+                    navController.navigate("login") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                }
             )
         }
         composable(

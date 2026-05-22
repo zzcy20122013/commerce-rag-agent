@@ -6,6 +6,7 @@ data class ChatMessage(
     val content: String,
     val productCards: List<ProductCard> = emptyList(),
     val isStreaming: Boolean = false,
+    val feedbackEnabled: Boolean = false,
     val feedbackRating: Int? = null
 )
 

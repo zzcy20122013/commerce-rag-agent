@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
+from app.agents.response_composer import compose_agent_response
 from app.agents.multimodal import run_multimodal_search
 from app.agents.graph import run_agent
 from app.models.db import get_db, init_db
@@ -61,6 +62,7 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
                     {"node": "image_text_fallback", "reason": "image_reference_without_upload"}
                 ],
             }
+    result = compose_agent_response(query=payload.message, result=result)
     assistant_message = add_message(
         db,
         session_id=session.id,
@@ -91,6 +93,7 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
                 "message_id": assistant_message.id,
                 "session_id": session.id,
                 "memory": result.get("memory", {}),
+                "feedback_enabled": should_enable_feedback(result),
             },
         )
         yield sse("trace", result.get("trace", []))
@@ -123,3 +126,21 @@ def implies_missing_image(message: str) -> bool:
         "same style",
     ]
     return any(keyword in lowered for keyword in image_reference_keywords)
+
+
+def should_enable_feedback(result: dict) -> bool:
+    intent = str(result.get("intent", "")).strip().lower()
+    if intent in {"chitchat"}:
+        return False
+    if result.get("product_cards"):
+        return True
+    return intent in {
+        "faq",
+        "product_knowledge",
+        "product_query",
+        "shopping_guide",
+        "decision_guide",
+        "comparison",
+        "multimodal_search",
+        "image_text_fallback",
+    }

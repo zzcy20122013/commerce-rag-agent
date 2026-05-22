@@ -41,4 +41,15 @@ class SessionListViewModel(
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
         }
     }
+
+    fun deleteSession(sessionId: String, onDeleted: () -> Unit = {}) {
+        viewModelScope.launch {
+            runCatching { repository.deleteSession(sessionId) }
+                .onSuccess {
+                    onDeleted()
+                    refresh()
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message) }
+        }
+    }
 }

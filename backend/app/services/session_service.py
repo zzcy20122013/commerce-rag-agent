@@ -1,10 +1,10 @@
 import uuid
 import json
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models.tables import ChatSession, Message
+from app.models.tables import ChatSession, Feedback, Message, RecommendationLog, RetrievalLog
 
 
 def ensure_session(db: Session, *, session_id: str | None = None, user_id: str = "debug-user") -> ChatSession:
@@ -58,3 +58,63 @@ def get_latest_memory(db: Session, *, session_id: str) -> dict:
         if isinstance(memory, dict):
             return memory
     return {}
+
+
+def list_session_messages(db: Session, *, session_id: str) -> list[dict]:
+    messages = list(
+        db.scalars(
+            select(Message)
+            .where(Message.session_id == session_id)
+            .order_by(Message.created_at.asc())
+        ).all()
+    )
+    if not messages:
+        return []
+
+    recommendation_logs = list(
+        db.scalars(
+            select(RecommendationLog)
+            .where(RecommendationLog.session_id == session_id)
+        ).all()
+    )
+    cards_by_message_id: dict[str, list] = {}
+    for log in recommendation_logs:
+        try:
+            cards = json.loads(log.products_json or "[]")
+        except json.JSONDecodeError:
+            cards = []
+        if isinstance(cards, list):
+            cards_by_message_id[log.message_id] = cards
+
+    return [
+        {
+            "id": message.id,
+            "role": message.role,
+            "content": message.content,
+            "createdAt": message.created_at.isoformat(),
+            "productCards": cards_by_message_id.get(message.id, []),
+        }
+        for message in messages
+    ]
+
+
+def delete_session(db: Session, *, session_id: str) -> bool:
+    session = db.get(ChatSession, session_id)
+    if not session:
+        return False
+
+    message_ids = list(
+        db.scalars(
+            select(Message.id)
+            .where(Message.session_id == session_id)
+        ).all()
+    )
+    if message_ids:
+        db.execute(delete(Feedback).where(Feedback.message_id.in_(message_ids)))
+
+    db.execute(delete(RecommendationLog).where(RecommendationLog.session_id == session_id))
+    db.execute(delete(RetrievalLog).where(RetrievalLog.session_id == session_id))
+    db.execute(delete(Message).where(Message.session_id == session_id))
+    db.delete(session)
+    db.commit()
+    return True

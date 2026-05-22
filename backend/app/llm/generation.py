@@ -7,8 +7,10 @@ from dotenv import load_dotenv
 
 from app.llm.openai_compatible_client import OpenAICompatibleClient
 from app.llm.prompt_registry import (
+    build_chitchat_messages,
     build_decision_guide_messages,
     build_faq_messages,
+    build_response_composer_messages,
     build_shopping_messages,
 )
 
@@ -75,6 +77,19 @@ def generate_decision_guide_result(
     )
 
 
+def generate_chitchat_result(
+    *,
+    query: str,
+    fallback: str,
+    client: ChatClient | None = None,
+) -> GenerationResult:
+    return _generate_result(
+        messages=build_chitchat_messages(query=query),
+        fallback=fallback,
+        client=client,
+    )
+
+
 def generate_faq_answer(
     *,
     query: str,
@@ -83,6 +98,33 @@ def generate_faq_answer(
     client: ChatClient | None = None,
 ) -> str:
     return generate_faq_result(query=query, hits=hits, fallback=fallback, client=client).content
+
+
+def generate_response_composer_result(
+    *,
+    query: str,
+    intent: str,
+    draft_answer: str,
+    memory: dict,
+    product_cards: list[dict],
+    retrieved_items: list,
+    fallback: str,
+    comparison: dict | None = None,
+    client: ChatClient | None = None,
+) -> GenerationResult:
+    return _generate_result(
+        messages=build_response_composer_messages(
+            query=query,
+            intent=intent,
+            draft_answer=draft_answer,
+            memory=memory,
+            product_cards=product_cards,
+            retrieved_items=retrieved_items,
+            comparison=comparison,
+        ),
+        fallback=fallback,
+        client=client,
+    )
 
 
 def generate_faq_result(
