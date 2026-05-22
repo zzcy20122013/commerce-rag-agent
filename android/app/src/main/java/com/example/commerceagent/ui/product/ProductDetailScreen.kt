@@ -48,7 +48,7 @@ fun ProductDetailScreen(productId: String, onBack: () -> Unit) {
             if (error != null) Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
             product?.let {
                 AsyncImage(
-                    model = ApiConfig.BASE_URL + it.imageUrl,
+                    model = ApiConfig.resolveUrl(it.imageUrl),
                     contentDescription = it.title,
                     modifier = Modifier.height(180.dp)
                 )

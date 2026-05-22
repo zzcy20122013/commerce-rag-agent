@@ -52,6 +52,14 @@ class ChatViewModel(
 
     fun send() {
         val text = state.value.input.trim()
+        sendText(text)
+    }
+
+    fun sendPrompt(text: String) {
+        sendText(text.trim())
+    }
+
+    private fun sendText(text: String) {
         if (text.isBlank() || state.value.isSending) return
         val assistantTempId = "assistant_${UUID.randomUUID().toString().take(8)}"
         _state.value = state.value.copy(

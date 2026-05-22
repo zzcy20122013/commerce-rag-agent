@@ -36,6 +36,7 @@ outputs/
 *.db
 *.sqlite
 *.sqlite3
+*.hprof
 backend/app/data/chroma/
 backend/app/data/uploads/
 backend/app/data/imports/
