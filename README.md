@@ -47,28 +47,40 @@ DOUBAO_MODEL=doubao-seed-2-0-lite-260428
 
 以下命令默认在仓库根目录执行。
 
-后端服务：
+### 1. 启动后端服务
+
+后端提供 Agent、RAG、商品卡片、会话、反馈和图片上传接口。
 
 ```powershell
 .\scripts\start_backend.cmd
 ```
 
-Web Debug 调试台：
+默认地址是 `http://127.0.0.1:8000`。
+
+### 2. 启动 Web Debug 调试台
+
+Web Debug 用于开发调试，可以查看 trace、Raw SSE、商品卡片、图片上传和检索链路。
 
 ```powershell
 .\scripts\start_web_debug.cmd
 ```
 
-默认后端地址是 `http://127.0.0.1:8000`，Web Debug 默认运行在 Vite 输出的本地地址，用于查看 trace、Raw SSE、商品卡片和图搜调试信息。
+启动后打开 Vite 输出的本地地址即可。页面左侧 Backend 默认填写 `http://127.0.0.1:8000`。
 
-Android 原生端：
+### 3. 启动 Android 原生端
+
+Android 是正式展示端，用于验证接近移动端产品形态的聊天、商品卡片、多轮会话和反馈体验。
 
 1. 打开 Android Studio。
 2. 选择本仓库下的 `android/` 目录。
 3. 启动 Pixel/Android 模拟器或连接 Android 真机。
 4. 确认后端正在 `http://127.0.0.1:8000` 运行。
-5. 点击 Run。模拟器内访问宿主机本地服务要使用 `http://10.0.2.2:8000`，项目已按这个地址配置。
-6. 如果使用真机，需要把 Android 端后端地址改成电脑局域网 IP，例如 `http://192.168.x.x:8000`，并确保手机和电脑在同一网络。
+5. 点击 Android Studio 的 Run。
+
+注意：
+
+- Android 模拟器访问电脑本机后端要使用 `http://10.0.2.2:8000`，项目已按这个地址配置。
+- 如果使用真机，需要把 Android 端后端地址改成电脑局域网 IP，例如 `http://192.168.x.x:8000`，并确保手机和电脑在同一网络。
 
 ## 关键接口
 
