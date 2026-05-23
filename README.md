@@ -31,13 +31,15 @@
 
 ## 本地配置
 
-1. 复制环境变量模板：
+本项目只保留根目录 `.env.example` 作为公开模板；后端实际读取的是 `backend/.env`，不要把真实 key 写回模板或提交到 GitHub。
+
+1. 从根目录复制环境变量模板：
 
 ```powershell
 Copy-Item .env.example backend\.env
 ```
 
-2. 在 `backend/.env` 中填入你的豆包 Ark API Key：
+2. 在本地的 `backend/.env` 中填入你的豆包 Ark API Key：
 
 ```env
 DOUBAO_API_KEY=你的 key

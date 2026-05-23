@@ -765,75 +765,91 @@ flowchart LR
 7. 增加日志与错误追踪。
 8. 预留 SQLite 到 PostgreSQL 的迁移路径。
 
-## 11. 推荐项目目录结构
+## 11. 当前推荐项目目录结构
 
 ```text
 agent/
+  README.md
+  .env.example
   backend/
     app/
       main.py
       api/
         chat.py
-        upload.py
+        cart.py
         docs.py
-        catalog.py
+        feedback.py
         products.py
         sessions.py
-        feedback.py
-        cart.py
+        upload.py
       agents/
-        graph.py
-        intent_router.py
-        shopping_guide.py
-        product_knowledge.py
+        chitchat.py
         compare.py
         decision_guide.py
         faq.py
-        order.py
-        purchase.py
+        graph.py
+        intent_router.py
         multimodal.py
-        chitchat.py
+        purchase.py
+        product_knowledge.py
         response_composer.py
-      retrieval/
-        text_index.py
-        image_index.py
-        retrievers.py
-        reranker.py
-      llm/
-        openai_compatible_client.py
-        generation.py
-        prompt_registry.py
-        prompt_blocks.py
+        shopping_guide.py
+      data/
+        catalog/
+        images/
+        taxonomy.json
+        chroma/          # 本地索引目录，不提交
+        uploads/         # 本地上传目录，不提交
+        commerce.db      # 本地 SQLite 运行数据库，不提交
       embeddings/
         bge_m3.py
         chinese_clip.py
+      evaluation/
+        datasets/
+        reports/
+        *_metrics.py
+        run_*_eval.py
+      llm/
+        generation.py
+        openai_compatible_client.py
+        prompt_blocks.py
+        prompt_registry.py
+      models/
+        db.py
+        schemas.py
+        tables.py
+      retrieval/
+        image_index.py
+        retrievers.py
+        reranker.py
+        text_index.py
+      scripts/
+        import_catalog.py
+        import_json_dataset.py
+        ingest_images.py
+        ingest_text.py
+        rebuild_indexes.py
       services/
         catalog_import_service.py
-        product_service.py
-        session_service.py
         cart_service.py
-        order_service.py
         document_service.py
         feedback_service.py
         image_service.py
         index_job_service.py
         json_dataset_import_service.py
+        product_service.py
+        session_service.py
         taxonomy.py
-      models/
-        db.py
-        tables.py
-        schemas.py
-      data/
-        catalog/
-        chroma/
-        product_images/
-        uploads/
       tests/
-        test_session_history.py
-        test_response_composer.py
         test_cart_api.py
         test_cart_service.py
+        test_chat_feedback_flag.py
+        test_feedback_loop_eval_metrics.py
+        test_guide_eval_metrics.py
         test_purchase_cart_agent.py
+        test_session_history.py
+        test_response_composer.py
+    pyproject.toml
   web-debug/
     src/
   android/
@@ -848,8 +864,8 @@ agent/
     plans/
     project/
   scripts/
-  models/
-  outputs/
+  models/                 # 本地模型缓存，不提交
+  outputs/                # 本地评测、导出和临时运行产物，不提交
 ```
 
 ## 12. 方案总结
