@@ -1,4 +1,5 @@
 from app.agents.response_composer import compose_agent_response
+from app.llm.prompt_registry import build_response_composer_messages
 
 
 class FakeChatClient:
@@ -70,3 +71,22 @@ def test_response_composer_does_not_rewrite_purchase_cart_actions() -> None:
     assert composed["trace"][-1]["node"] == "response_composer"
     assert composed["trace"][-1]["reason"] == "transactional_answer_preserved"
     assert client.messages == []
+
+
+def test_response_composer_prompt_keeps_guide_decision_rules() -> None:
+    messages = build_response_composer_messages(
+        query="300以内通勤鞋，有没有更稳的",
+        intent="shopping_guide",
+        draft_answer="没有严格符合条件的商品，第一款超预算。",
+        memory={"budget_max": 300, "no_exact_match": True},
+        product_cards=[{"product_id": "p1", "title": "通勤鞋", "price": 329}],
+        retrieved_items=[],
+    )
+
+    system_prompt = messages[0]["content"]
+    assert "主推" in system_prompt
+    assert "备选" in system_prompt
+    assert "劝退" in system_prompt
+    assert "没有严格符合条件" in system_prompt
+    assert "商品卡片里的推荐理由" in system_prompt
+    assert "不要写成检索报告" in system_prompt

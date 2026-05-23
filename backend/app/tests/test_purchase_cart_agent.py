@@ -122,6 +122,117 @@ def test_purchase_agent_adds_requested_quantity_for_single_product() -> None:
         db.close()
 
 
+def test_purchase_agent_does_not_treat_quantity_as_selection_count() -> None:
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    db = TestingSession()
+    try:
+        products = [
+            _product("p_food_020", "日清合味道海鲜风味杯面", 69),
+            _product("p_food_021", "雀巢速溶咖啡", 60),
+            _product("p_food_022", "黑咖啡冻干粉", 42),
+        ]
+        db.add_all(products)
+        db.commit()
+
+        node = purchase_help_node(db)
+        result = node(
+            {
+                "query": "这个加 3 件",
+                "memory": {"last_product_ids": [product.id for product in products]},
+                "trace": [],
+            }
+        )
+
+        cart_items = list_cart_items(db)
+        assert "已加入购物车" in result["answer"]
+        assert [item["product"]["id"] for item in cart_items] == ["p_food_020"]
+        assert [item["quantity"] for item in cart_items] == [3]
+    finally:
+        db.close()
+
+
+def test_purchase_agent_adds_first_two_recommendations_with_quantity() -> None:
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    db = TestingSession()
+    try:
+        products = [
+            _product("p_food_020", "日清合味道海鲜风味杯面", 69),
+            _product("p_food_021", "雀巢速溶咖啡", 60),
+            _product("p_food_022", "黑咖啡冻干粉", 42),
+        ]
+        db.add_all(products)
+        db.commit()
+
+        node = purchase_help_node(db)
+        result = node(
+            {
+                "query": "这两个都加 3 件",
+                "memory": {"last_product_ids": [product.id for product in products]},
+                "trace": [],
+            }
+        )
+
+        cart_items = list_cart_items(db)
+        assert "已加入购物车" in result["answer"]
+        assert [item["product"]["id"] for item in cart_items] == ["p_food_020", "p_food_021"]
+        assert [item["quantity"] for item in cart_items] == [3, 3]
+    finally:
+        db.close()
+
+
+def test_purchase_agent_updates_cart_item_by_product_word() -> None:
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    db = TestingSession()
+    try:
+        db.add_all([
+            _product("p_food_020", "日清合味道海鲜风味杯面", 69),
+            _product("p_beauty_006", "巴黎欧莱雅防晒隔离露", 170),
+        ])
+        db.commit()
+
+        node = purchase_help_node(db)
+        node({"query": "把刚才推荐的都加入购物车", "memory": {"last_product_ids": ["p_food_020", "p_beauty_006"]}, "trace": []})
+        result = node({"query": "把防晒那个改成 2 瓶", "memory": {}, "trace": []})
+
+        cart_items = list_cart_items(db)
+        assert "防晒" in result["answer"]
+        assert [item["quantity"] for item in cart_items] == [1, 2]
+    finally:
+        db.close()
+
+
+def test_purchase_agent_removes_cart_item_by_recent_position_phrase() -> None:
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    db = TestingSession()
+    try:
+        db.add_all([
+            _product("p_food_020", "日清合味道海鲜风味杯面", 69),
+            _product("p_beauty_006", "巴黎欧莱雅防晒隔离露", 170),
+        ])
+        db.commit()
+
+        node = purchase_help_node(db)
+        node({"query": "把刚才推荐的都加入购物车", "memory": {"last_product_ids": ["p_food_020", "p_beauty_006"]}, "trace": []})
+        result = node({"query": "刚才第二个不要了", "memory": {}, "trace": []})
+
+        assert "已从购物车删除" in result["answer"]
+        assert [item["product"]["id"] for item in list_cart_items(db)] == ["p_food_020"]
+    finally:
+        db.close()
+
+
 def _product(product_id: str, title: str, price: int) -> Product:
     return Product(
         id=product_id,

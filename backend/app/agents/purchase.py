@@ -23,20 +23,22 @@ def purchase_help_node(db: Session):
         if action == "view":
             return build_cart_state(state, db, trace_action="view")
         if action == "remove":
-            position = extract_position(query) or 1
+            position = resolve_cart_position(db, query) or 1
+            product_name = cart_item_name_at(db, position)
             removed = remove_cart_item_by_position(db, position=position)
             answer = (
-                f"已从购物车删除第 {position} 个商品。"
+                f"已从购物车删除{format_item_reference(position, product_name)}。"
                 if removed
                 else f"购物车里没有第 {position} 个商品，我没乱删。"
             )
             return build_cart_state(state, db, answer_prefix=answer, trace_action="remove")
         if action == "update":
-            position = extract_position(query) or 1
+            position = resolve_cart_position(db, query) or 1
             quantity = extract_quantity(query) or 1
+            product_name = cart_item_name_at(db, position)
             updated = update_cart_item_quantity_by_position(db, position=position, quantity=quantity)
             answer = (
-                f"已把第 {position} 个商品数量改成 {quantity}。"
+                f"已把{format_item_reference(position, product_name)}数量改成 {quantity}。"
                 if updated
                 else f"购物车里没有第 {position} 个商品，数量还没有改。"
             )
@@ -79,7 +81,7 @@ def purchase_help_node(db: Session):
 
 def parse_cart_action(query: str) -> str:
     text = query.lower()
-    if any(word in text for word in ["删除", "删掉", "移除", "去掉", "remove"]):
+    if any(word in text for word in ["删除", "删掉", "移除", "去掉", "不要", "别要", "拿掉", "remove"]):
         return "remove"
     if any(word in text for word in ["数量", "改成", "改为", "改到", "加到"]) and re.search(r"\d|一|二|两|三|四|五", text):
         return "update"
@@ -112,6 +114,9 @@ def select_products_for_cart(db: Session, *, query: str, memory: dict) -> list[P
 
     if asks_for_all(query):
         return products[:5]
+    selection_count = extract_selection_count(query)
+    if selection_count:
+        return products[:selection_count]
     return products[:1]
 
 
@@ -142,6 +147,19 @@ def asks_for_all(query: str) -> bool:
     return any(word in query for word in ["都加入", "全部加入", "全加", "刚才推荐的都", "这几个都"])
 
 
+def extract_selection_count(query: str) -> int | None:
+    patterns = [
+        r"(?:这|那|前|刚才|上面)\s*([一二两三四五六七八九十\d]+)\s*(?:个|款|件|样)\s*(?:都|一起|全部)?",
+        r"([一二两三四五六七八九十\d]+)\s*(?:个|款|样)\s*(?:都|一起|全部)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, query)
+        if match:
+            count = chinese_number_to_int(match.group(1))
+            return count if count > 0 else None
+    return None
+
+
 def extract_position(query: str) -> int | None:
     position_words = {
         "第一个": 1,
@@ -158,6 +176,57 @@ def extract_position(query: str) -> int | None:
             return position
     match = re.search(r"第\s*(\d+)\s*个?", query)
     return int(match.group(1)) if match else None
+
+
+def resolve_cart_position(db: Session, query: str) -> int | None:
+    explicit_position = extract_position(query)
+    if explicit_position:
+        return explicit_position
+    return find_cart_position_by_product_word(db, query)
+
+
+def find_cart_position_by_product_word(db: Session, query: str) -> int | None:
+    normalized_query = query.lower()
+    cart_items = list_cart_items(db)
+    best_match: tuple[int, int] | None = None
+    for index, item in enumerate(cart_items, start=1):
+        product = item["product"]
+        product_id = str(product.get("id", "")).lower()
+        title = str(product.get("title", "")).lower()
+        if product_id and product_id in normalized_query:
+            return index
+        score = best_title_overlap_score(title, normalized_query)
+        if score and (best_match is None or score > best_match[1]):
+            best_match = (index, score)
+    return best_match[0] if best_match else None
+
+
+def best_title_overlap_score(title: str, query: str) -> int:
+    ignored_terms = {"这个", "那个", "刚才", "上面", "加入", "购物", "购物车", "改成", "改为", "数量", "删除", "不要"}
+    best = 0
+    max_len = min(8, len(title))
+    for size in range(2, max_len + 1):
+        for start in range(0, len(title) - size + 1):
+            term = title[start : start + size]
+            if term in ignored_terms or term.isdigit():
+                continue
+            if term in query:
+                best = max(best, size)
+    return best
+
+
+def cart_item_name_at(db: Session, position: int) -> str | None:
+    index = position - 1
+    cart_items = list_cart_items(db)
+    if index < 0 or index >= len(cart_items):
+        return None
+    return str(cart_items[index]["product"]["title"])
+
+
+def format_item_reference(position: int, product_name: str | None) -> str:
+    if product_name:
+        return f"第 {position} 个商品（{product_name}）"
+    return f"第 {position} 个商品"
 
 
 def extract_quantity(query: str) -> int | None:

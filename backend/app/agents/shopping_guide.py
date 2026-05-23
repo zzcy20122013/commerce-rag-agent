@@ -26,6 +26,7 @@ def shopping_guide_node(db: Session):
         query = state["query"]
         constraints = extract_shopping_constraints(query).model_dump()
         memory = merge_memory(state.get("memory", {}), constraints, query)
+        effective_constraints = build_effective_constraints(constraints, memory)
         products = filter_products(
             db,
             category=memory.get("category"),
@@ -46,7 +47,7 @@ def shopping_guide_node(db: Session):
             }
             return {
                 **state,
-                "constraints": constraints,
+                "constraints": effective_constraints,
                 "memory": {**memory, "exclude_product_ids": []},
                 "retrieved_items": [],
                 "product_cards": cards,
@@ -69,7 +70,7 @@ def shopping_guide_node(db: Session):
             }
             return {
                 **state,
-                "constraints": constraints,
+                "constraints": effective_constraints,
                 "memory": {**memory, "last_product_ids": []},
                 "retrieved_items": [],
                 "product_cards": cards,
@@ -109,7 +110,7 @@ def shopping_guide_node(db: Session):
             trace_item["llm_error"] = generation.llm_error
         return {
             **state,
-            "constraints": constraints,
+            "constraints": effective_constraints,
             "memory": {**memory, "last_product_ids": [product.id for product in products[:3]]},
             "retrieved_items": [{"product_id": product.id, "title": product.title} for product in products[:5]],
             "product_cards": cards,
@@ -131,7 +132,7 @@ def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
                 memory[field] = merged
             else:
                 memory[field] = value
-    memory["strict_filter"] = bool(constraints.get("strict_filter"))
+    memory["strict_filter"] = bool(constraints.get("strict_filter") or previous.get("strict_filter"))
     if constraints.get("category") and not constraints.get("subcategory") and _asks_for_broad_category(query):
         memory.pop("subcategory", None)
     lowered = query.lower()
@@ -145,11 +146,31 @@ def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
         _append_preference(memory, "修护维稳")
     if any(word in lowered for word in ["保湿", "补水"]):
         _append_preference(memory, "保湿")
+    for color, aliases in COLOR_PREFERENCE_ALIASES.items():
+        if any(alias in lowered for alias in aliases):
+            _append_preference(memory, color)
     if _asks_for_more_options(query):
         memory["exclude_product_ids"] = previous.get("last_product_ids", [])
     else:
         memory.pop("exclude_product_ids", None)
     return memory
+
+
+def build_effective_constraints(constraints: dict, memory: dict) -> dict:
+    effective = dict(constraints)
+    for field in [
+        "category",
+        "subcategory",
+        "budget_max",
+        "audience",
+        "use_cases",
+        "preferences",
+        "product_ids",
+        "strict_filter",
+    ]:
+        if memory.get(field):
+            effective[field] = memory[field]
+    return effective
 
 
 def exclude_previous_products(products: list[Product], memory: dict) -> list[Product]:
@@ -278,15 +299,22 @@ def _hybrid_score(product: Product, memory: dict, query: str, semantic_scores: d
 def product_to_card(product: Product, memory: dict, rank: int) -> dict:
     reasons = []
     if memory.get("budget_max") and product.price <= memory["budget_max"]:
-        reasons.append("预算内")
+        reasons.append(f"预算内：{product.price}<={memory['budget_max']}")
     elif memory.get("budget_max") and product.price > memory["budget_max"]:
-        reasons.append("超预算备选")
-    if memory.get("subcategory"):
-        reasons.append(memory["subcategory"])
+        reasons.append(f"超预算：{product.price}>{memory['budget_max']}")
+    product_text = _product_explain_text(product)
     for use_case in memory.get("use_cases", []):
-        reasons.append(f"适合{use_case}")
+        if use_case.lower() in product_text:
+            reasons.append(f"适合{use_case}")
     for preference in memory.get("preferences", []):
-        reasons.append(preference)
+        if preference.lower() in product_text:
+            reasons.append(f"命中偏好：{preference}")
+    if product.rating >= 4.5:
+        reasons.append(f"评分较高：{product.rating:.1f}")
+    if product.sales >= 1000:
+        reasons.append(f"销量较高：{product.sales}")
+    if memory.get("subcategory") and not any("适合" in reason or "命中偏好" in reason for reason in reasons):
+        reasons.append(f"品类匹配：{memory['subcategory']}")
     if not reasons:
         reasons.append("综合评分靠前")
     return {
@@ -299,7 +327,7 @@ def product_to_card(product: Product, memory: dict, rank: int) -> dict:
         "rating": product.rating,
         "sales": product.sales,
         "stock_status": "in_stock" if product.stock > 0 else "out_of_stock",
-        "reasons": list(dict.fromkeys(reasons))[:3],
+        "reasons": list(dict.fromkeys(reasons))[:6],
         "score": round(max(0.5, 0.95 - rank * 0.04), 2),
     }
 
@@ -336,19 +364,39 @@ def build_recommendation_answer(
             "下面这些只能算同类里的加预算备选；如果预算不能提高，我更建议你放宽品牌、屏幕尺寸，或者等活动价/看二手。"
         )
     top_card = cards[0]
+    top_reason_text = format_card_reasons(top_card)
     if len(cards) == 1:
-        reason_text = "、".join(top_card.get("reasons", [])[:2])
         return (
             f"我会先看这款：{top_card['title']}，价格是 {top_card['price']} 元。"
-            f"{f'它和你的需求主要匹配在{reason_text}。' if reason_text else ''}"
+            f"{f'主推理由是{top_reason_text}。' if top_reason_text else ''}"
             "如果你想更稳一点，可以再补充预算、品牌偏好或不能接受的点，我再帮你缩小范围。"
         )
     second_card = cards[1]
+    second_reason_text = format_card_reasons(second_card, limit=2)
     return (
-        f"这几款里我会优先看 {top_card['title']}，价格 {top_card['price']} 元，整体更贴近你的需求。"
-        f"如果你更想省钱，可以再看看 {second_card['title']}，它是 {second_card['price']} 元。"
+        f"这几款里我会优先看 {top_card['title']}，价格 {top_card['price']} 元，"
+        f"{f'主推理由是{top_reason_text}。' if top_reason_text else '整体更贴近你的需求。'}"
+        f"如果你想留个备选，可以再看看 {second_card['title']}，它是 {second_card['price']} 元"
+        f"{f'，主要优势是{second_reason_text}' if second_reason_text else ''}。"
         "我建议你先按预算和最在意的使用场景二选一，不用只盯参数。"
     )
+
+
+def format_card_reasons(card: dict, *, limit: int = 3) -> str:
+    reasons = [str(reason) for reason in card.get("reasons", []) if str(reason).strip()]
+    return "、".join(reasons[:limit])
+
+
+def _product_explain_text(product: Product) -> str:
+    return " ".join(
+        [
+            product.title,
+            product.category,
+            product.brand,
+            product.description,
+            product.specs_json or "",
+        ]
+    ).lower()
 
 
 def build_no_more_options_answer(memory: dict) -> str:
@@ -380,6 +428,14 @@ def _append_preference(memory: dict, value: str) -> None:
 
 
 DOMAIN_KEYWORDS = [
+    "黑色",
+    "白色",
+    "灰色",
+    "蓝色",
+    "红色",
+    "粉色",
+    "米色",
+    "棕色",
     "敏感肌",
     "易敏肌",
     "修护",
@@ -423,6 +479,18 @@ DOMAIN_KEYWORDS = [
     "背包",
     "双肩包",
 ]
+
+
+COLOR_PREFERENCE_ALIASES = {
+    "黑色": ["黑色", "黑的", "黑款", "黑"],
+    "白色": ["白色", "白的", "白款", "白"],
+    "灰色": ["灰色", "灰的", "灰款", "灰"],
+    "蓝色": ["蓝色", "蓝的", "蓝款", "蓝"],
+    "红色": ["红色", "红的", "红款", "红"],
+    "粉色": ["粉色", "粉的", "粉款", "粉"],
+    "米色": ["米色", "米白", "米"],
+    "棕色": ["棕色", "棕", "咖色"],
+}
 
 
 def _score_product(product: Product, memory: dict, query: str) -> float:
