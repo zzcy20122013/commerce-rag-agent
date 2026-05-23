@@ -27,6 +27,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.commerceagent.data.api.ApiConfig
@@ -44,13 +47,14 @@ fun ChatScreen(
     onOpenProduct: (String) -> Unit,
     onMenuClick: () -> Unit,
     onSessionChanged: (String) -> Unit,
-    onNewChat: () -> Unit,
     newChatSignal: Int,
     viewModel: ChatViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val snackbarHostState = remember { SnackbarHostState() }
     var showCartSheet by remember { mutableStateOf(false) }
     val cartQuantities = remember(state.cartItems) {
         state.cartItems.associate { it.product.id to it.quantity }
@@ -69,6 +73,22 @@ fun ChatScreen(
     LaunchedEffect(Unit) {
         viewModel.loadCart()
     }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.loadCart()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(state.cartNotice) {
+        val notice = state.cartNotice
+        if (!notice.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(notice)
+            viewModel.consumeCartNotice()
+        }
+    }
     LaunchedEffect(newChatSignal) {
         if (newChatSignal > 0) {
             viewModel.startNewChat()
@@ -83,6 +103,7 @@ fun ChatScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             ChatTopBar(
                 onMenuClick = onMenuClick,
@@ -90,8 +111,7 @@ fun ChatScreen(
                 onViewCart = {
                     viewModel.loadCart()
                     showCartSheet = true
-                },
-                onNewChat = onNewChat
+                }
             )
         },
         bottomBar = {
@@ -159,8 +179,7 @@ fun ChatScreen(
 private fun ChatTopBar(
     onMenuClick: () -> Unit,
     cartCount: Int,
-    onViewCart: () -> Unit,
-    onNewChat: () -> Unit
+    onViewCart: () -> Unit
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -186,9 +205,6 @@ private fun ChatTopBar(
                 ) {
                     Icon(Icons.Default.ShoppingCart, contentDescription = "查看购物车")
                 }
-            }
-            IconButton(onClick = onNewChat) {
-                Icon(Icons.Default.Add, contentDescription = "新对话")
             }
         },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(

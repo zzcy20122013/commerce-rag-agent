@@ -36,6 +36,7 @@ def classify_intent(text: str) -> IntentResult:
             "加入购物车",
             "购物车",
             "加购",
+            "加入",
             "删掉",
             "删除第",
             "移除第",

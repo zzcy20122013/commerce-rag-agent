@@ -1,0 +1,28 @@
+case_id,scenario,turn_count,expected_intent,actual_intent,passed,failed_checks,intent_ok,card_ok,term_ok,budget_ok,no_exact_match_ok,style_ok,memory_ok,cart_ok,card_count,answer
+guide_001,recommendation,1,shopping_guide,shopping_guide,true,,true,true,true,true,true,true,true,true,2,这几款里我会优先看 vivo Pad 6 Pro 12.1英寸高刷全面屏学习娱乐多任务办公平板电脑，价格 3299 元，整体更贴近你的需求。如果你更想省钱，可以再看看 小米平板 8 Pro 12.1英寸高刷大屏影音娱乐学习办公平板电脑，它是 3299 元。我建议你先按预算和最在意的使用场景二选一，不用只盯参数。
+guide_002,no_exact_match,1,shopping_guide,shopping_guide,true,,true,true,true,true,true,true,true,true,3,你这个预算卡得比较紧，我暂时没找到严格符合 300 元以内鞋 的选择。我看到最接近的一款也要 899 元，比你的预算高 599 元。下面这些只能算同类里的加预算备选；如果预算不能提高，我更建议你放宽品牌、屏幕尺寸，或者等活动价/看二手。
+guide_003,filter,1,shopping_guide,shopping_guide,true,,true,true,true,true,true,true,true,true,1,我会先看这款：方里柔焦蜜粉饼控油定妆细腻粉质隐匿毛孔提亮肤色粉饼7g，价格是 99 元。它和你的需求主要匹配在预算内、底妆。如果你想更稳一点，可以再补充预算、品牌偏好或不能接受的点，我再帮你缩小范围。
+guide_004,food_filter,1,shopping_guide,shopping_guide,true,,true,true,true,true,true,true,true,true,3,这几款里我会优先看 元气森林 白葡萄味 苏打气泡水 480ml×12 0糖0脂0卡，价格 52 元，整体更贴近你的需求。如果你更想省钱，可以再看看 雀巢咖啡 1+2原味 三合一速溶咖啡粉100条装即冲奶香咖啡饮品，它是 60 元。我建议你先按预算和最在意的使用场景二选一，不用只盯参数。
+guide_005,compare,1,compare,compare,true,,true,true,true,true,true,true,true,true,4,"你主要是在看敏感肌、修护、维稳，这几款里我会优先选 资生堂新红妍肌活精华露红腰子修护维稳强韧肌底精华50ml。
+主推：资生堂新红妍肌活精华露红腰子修护维稳强韧肌底精华50ml，590 元。更贴合你提到的敏感肌、修护；但评分不算突出，建议下单前重点看差评。
+省钱备选：玉兰油新生塑颜金纯面霜紧致提拉淡纹保湿抗初老大红瓶50g，239 元。更贴合你提到的敏感肌；价格压力最小；评分 3.7，口碑更稳。
+不太建议优先选：兰蔻小黑瓶全新精华肌底液修护维稳细腻毛孔提亮肤色30ml，760 元。更贴合你提到的敏感肌、修护；但评分不算突出，建议下单前重点看差评。
+如果你更在意少花钱，可以退一步看 玉兰油新生塑颜金纯面霜紧致提拉淡纹保湿抗初老大红瓶50g；但如果重点是敏感肌、修护、维稳，我还是更建议 资生堂新红妍肌活精华露红腰子修护维稳强韧肌底精华50ml。"
+guide_006,decision,1,decision_guide,decision_guide,true,,true,true,true,true,true,true,true,true,3,"先按用途分会更稳：如果只是上课、写论文、网课，轻薄本就够；如果是计算机、设计、剪视频或 3D 游戏，就要更看重处理器、内存和显卡。预算上，普通大学日常一般看 5000-7000 元档；游戏或重度创作通常要再往上加。
+
+核心参数我建议这样看：内存至少 16GB，想多开软件或长期用尽量 32GB；硬盘 512GB 起步，资料和项目多就看 1TB；屏幕优先 14-16 英寸、高分辨率，带去上课也别太重。
+
+结合现在商品库，我会先看 联想 ThinkBook 14+ 2026 全面屏高性能轻薄本商务学习笔记本电脑，价格约 6999 元。如果你更看重品牌生态或价格，也可以对比 联想 ThinkPad X1 Carbon Aura AI 元启版2026 14英寸高端商务轻薄本，价格约 10999 元。你再补充一下预算上限、专业方向、会不会打大型游戏，我就能继续帮你缩到一两款。"
+guide_007,multi_turn,2,shopping_guide,shopping_guide,true,,true,true,true,true,true,true,true,true,2,这几款里我会优先看 vivo Pad 6 Pro 12.1英寸高刷全面屏学习娱乐多任务办公平板电脑，价格 3299 元，整体更贴近你的需求。如果你更想省钱，可以再看看 小米平板 8 Pro 12.1英寸高刷大屏影音娱乐学习办公平板电脑，它是 3299 元。我建议你先按预算和最在意的使用场景二选一，不用只盯参数。
+guide_008,multi_turn_compare,3,compare,compare,true,,true,true,true,true,true,true,true,true,3,"你主要是在看维稳，这几款里我会优先选 资生堂新红妍肌活精华露红腰子修护维稳强韧肌底精华50ml。
+主推：资生堂新红妍肌活精华露红腰子修护维稳强韧肌底精华50ml，590 元。更贴合你提到的维稳；但评分不算突出，建议下单前重点看差评。
+省钱备选：珀莱雅赋能鲜颜淡纹紧致精华液抗皱紧致提升弹润淡化细纹30ml，300 元。更贴合你提到的维稳；价格压力最小；但评分不算突出，建议下单前重点看差评。
+不太建议优先选：兰蔻小黑瓶全新精华肌底液修护维稳细腻毛孔提亮肤色30ml，760 元。更贴合你提到的维稳；但评分不算突出，建议下单前重点看差评。
+如果你更在意少花钱，可以退一步看 珀莱雅赋能鲜颜淡纹紧致精华液抗皱紧致提升弹润淡化细纹30ml；但如果重点是维稳，我还是更建议 资生堂新红妍肌活精华露红腰子修护维稳强韧肌底精华50ml。"
+guide_009,no_exact_match_beauty,1,shopping_guide,shopping_guide,true,,true,true,true,true,true,true,true,true,3,你这个预算卡得比较紧，我暂时没找到严格符合 50 元以内精华 的选择。我看到最接近的一款也要 300 元，比你的预算高 250 元。下面这些只能算同类里的加预算备选；如果预算不能提高，我更建议你放宽品牌、屏幕尺寸，或者等活动价/看二手。
+guide_010,faq,1,faq,faq,true,,true,true,true,true,true,true,true,true,0,退货政策：签收后 7 天内，商品不影响二次销售可申请无理由退货；质量问题支持售后检测。
+guide_011,cart_add_all,2,purchase_help,purchase_help,true,,true,true,true,true,true,true,true,true,3,已加入购物车：特步 160X 6.0 PRO 碳板竞速跑鞋马拉松训练比赛轻量跑步鞋、adidas Ultraboost 5 男子缓震跑步鞋针织鞋面日常慢跑训练鞋、Nike Air Zoom Pegasus 41 男子缓震跑步鞋日常训练公路跑鞋。当前购物车：1. 特步 160X 6.0 PRO 碳板竞速跑鞋马拉松训练比赛轻量跑步鞋 x 1，小计 999 元；2. adidas Ultraboost 5 男子缓震跑步鞋针织鞋面日常慢跑训练鞋 x 1，小计 1399 元；3. Nike Air Zoom Pegasus 41 男子缓震跑步鞋日常训练公路跑鞋 x 1，小计 899 元。合计约 3297 元。
+guide_012,cart_add_quantity,2,purchase_help,purchase_help,true,,true,true,true,true,true,true,true,true,1,已加入购物车：元气森林 白葡萄味 苏打气泡水 480ml×12 0糖0脂0卡。本次每款加入 100 件。当前购物车：1. 元气森林 白葡萄味 苏打气泡水 480ml×12 0糖0脂0卡 x 100，小计 5200 元。合计约 5200 元。
+guide_013,cart_update,3,purchase_help,purchase_help,true,,true,true,true,true,true,true,true,true,0,已把第 1 个商品数量改成 3。 当前购物车：1. 方里柔焦蜜粉饼控油定妆细腻粉质隐匿毛孔提亮肤色粉饼7g x 3，小计 297 元。合计约 297 元。
+guide_014,cart_view,3,purchase_help,purchase_help,true,,true,true,true,true,true,true,true,true,0,当前购物车：1. vivo Pad 6 Pro 12.1英寸高刷全面屏学习娱乐多任务办公平板电脑 x 1，小计 3299 元；2. 小米平板 8 Pro 12.1英寸高刷大屏影音娱乐学习办公平板电脑 x 1，小计 3299 元。合计约 6598 元。
+guide_015,cart_remove,3,purchase_help,purchase_help,true,,true,true,true,true,true,true,true,true,0,已从购物车删除第 1 个商品。 当前购物车：1. adidas Ultraboost 5 男子缓震跑步鞋针织鞋面日常慢跑训练鞋 x 1，小计 1399 元；2. Nike Air Zoom Pegasus 41 男子缓震跑步鞋日常训练公路跑鞋 x 1，小计 899 元。合计约 2298 元。

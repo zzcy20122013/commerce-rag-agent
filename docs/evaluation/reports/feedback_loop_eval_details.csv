@@ -1,0 +1,6 @@
+answer,feedback_id,message_id,products_json,query,rating,reason,session_id
+我更推荐这款学习平板，预算内，记笔记和网课都比较稳。,feedback_eval_fb_001,feedback_eval_assistant_msg_001,"[""p_tablet_001""]",帮我推荐 3500 以内适合学生记笔记的平板,1,,feedback_eval_session_001
+这双鞋脚感不错，但价格明显超出你的 300 元预算。,feedback_eval_fb_002,feedback_eval_assistant_msg_002,"[""p_shoes_001""]",帮我推荐 300 以内通勤鞋,-1,太贵,feedback_eval_session_002
+我给你推荐一款精华，修护维稳比较好。,feedback_eval_fb_003,feedback_eval_assistant_msg_003,"[""p_beauty_001""]",找 100 元以内控油粉饼,-1,不相关,feedback_eval_session_003
+两款都还可以，建议你自己看看。,feedback_eval_fb_004,feedback_eval_assistant_msg_004,"[""p_beauty_002"", ""p_beauty_004""]",这两款精华哪个更适合敏感肌？,-1,解释不清,feedback_eval_session_004
+已加入购物车，当前购物车里有 1 件商品。,feedback_eval_fb_005,feedback_eval_assistant_msg_005,"[""p_food_001""]",帮我把刚才推荐的饮料加入购物车,1,,feedback_eval_session_005

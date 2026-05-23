@@ -30,6 +30,7 @@ data class ChatUiState(
     val cartItems: List<CartItem> = emptyList(),
     val cartTotal: Int = 0,
     val isCartLoading: Boolean = false,
+    val cartNotice: String? = null,
     val error: String? = null
 )
 
@@ -45,7 +46,13 @@ class ChatViewModel(
 
     fun setSession(sessionId: String?) {
         if (_state.value.sessionId == sessionId) return
-        _state.value = ChatUiState(sessionId = sessionId, isSending = sessionId != null)
+        val current = _state.value
+        _state.value = ChatUiState(
+            sessionId = sessionId,
+            isSending = sessionId != null,
+            cartItems = current.cartItems,
+            cartTotal = current.cartTotal
+        )
         if (sessionId == null) return
         viewModelScope.launch {
             runCatching { sessionRepository.listMessages(sessionId) }
@@ -69,7 +76,11 @@ class ChatViewModel(
     }
 
     fun startNewChat() {
-        _state.value = ChatUiState()
+        val current = _state.value
+        _state.value = ChatUiState(
+            cartItems = current.cartItems,
+            cartTotal = current.cartTotal
+        )
     }
 
     fun updateInput(value: String) {
@@ -123,15 +134,15 @@ class ChatViewModel(
                         cartTotal = cart.total,
                         isCartLoading = false,
                         error = null,
-                        messages = _state.value.messages + ChatMessage(
-                            id = "cart_notice_${UUID.randomUUID().toString().take(8)}",
-                            role = MessageRole.Assistant,
-                            content = "已把「$title」加入购物车。当前这款是 $quantity 件，购物车合计约 ${cart.total} 元。"
-                        )
+                        cartNotice = "已把「$title」加入购物车。当前这款 $quantity 件，购物车合计约 ${cart.total} 元。"
                     )
                 }
                 .onFailure { _state.value = _state.value.copy(error = it.message, isCartLoading = false) }
         }
+    }
+
+    fun consumeCartNotice() {
+        _state.value = _state.value.copy(cartNotice = null)
     }
 
     fun updateCartQuantity(position: Int, quantity: Int) {

@@ -1,0 +1,151 @@
+[
+  {
+    "case_id": "guide_001",
+    "scenario": "recommendation",
+    "turns": ["帮我推荐 3500 以内适合学生记笔记和网课的平板"],
+    "expected_intent": "shopping_guide",
+    "expected_terms": ["平板", "学生", "网课"],
+    "budget_max": 3500,
+    "min_cards": 1,
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_002",
+    "scenario": "no_exact_match",
+    "turns": ["帮我推荐 300 以内适合通勤的鞋"],
+    "expected_intent": "shopping_guide",
+    "expected_terms": ["鞋", "通勤"],
+    "budget_max": 300,
+    "min_cards": 0,
+    "expected_no_exact_match": true
+  },
+  {
+    "case_id": "guide_003",
+    "scenario": "filter",
+    "turns": ["100 元以内控油定妆粉饼或散粉"],
+    "expected_intent": "shopping_guide",
+    "expected_terms": ["控油", "粉"],
+    "budget_max": 100,
+    "min_cards": 1,
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_004",
+    "scenario": "food_filter",
+    "turns": ["帮我找 80 元以内适合办公室囤的无糖饮料"],
+    "expected_intent": "shopping_guide",
+    "expected_terms": ["无糖", "饮料"],
+    "budget_max": 80,
+    "min_cards": 1,
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_005",
+    "scenario": "compare",
+    "turns": ["兰蔻小黑瓶和资生堂红腰子，哪个更适合敏感肌修护维稳？"],
+    "expected_intent": "compare",
+    "expected_terms": ["敏感肌", "修护", "维稳"],
+    "min_cards": 0,
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_006",
+    "scenario": "decision",
+    "turns": ["我马上大学了，想买一台电脑，不知道买什么样的"],
+    "expected_intent": "decision_guide",
+    "expected_terms": ["大学", "电脑"],
+    "min_cards": 0,
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_007",
+    "scenario": "multi_turn",
+    "turns": ["帮我推荐 3500 以内适合学生记笔记和网课的平板", "有没有更轻一点的？"],
+    "expected_intent": "shopping_guide",
+    "expected_terms": ["轻", "平板"],
+    "budget_max": 3500,
+    "min_cards": 1,
+    "expected_memory_terms": ["3500", "轻便"],
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_008",
+    "scenario": "multi_turn_compare",
+    "turns": ["帮我推荐 800 以内适合敏感肌修护维稳的精华", "有没有更便宜一点的？", "哪个更适合长期维稳？"],
+    "expected_intent": "compare",
+    "expected_terms": ["敏感肌", "维稳", "精华"],
+    "budget_max": 800,
+    "min_cards": 0,
+    "expected_memory_terms": ["敏感肌友好", "修护维稳"],
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_009",
+    "scenario": "no_exact_match_beauty",
+    "turns": ["50 元以内适合敏感肌修护维稳的精华"],
+    "expected_intent": "shopping_guide",
+    "expected_terms": ["敏感肌", "精华"],
+    "budget_max": 50,
+    "min_cards": 0,
+    "expected_no_exact_match": true
+  },
+  {
+    "case_id": "guide_010",
+    "scenario": "faq",
+    "turns": ["退货政策是什么？"],
+    "expected_intent": "faq",
+    "expected_terms": ["退货"],
+    "min_cards": 0,
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_011",
+    "scenario": "cart_add_all",
+    "turns": ["帮我推荐 300 以内适合通勤的鞋", "把刚才推荐的都加入购物车"],
+    "expected_intent": "purchase_help",
+    "expected_terms": ["购物车"],
+    "min_cards": 0,
+    "expected_cart": {"action": "add", "min_items": 1},
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_012",
+    "scenario": "cart_add_quantity",
+    "turns": ["帮我推荐 80 元以内适合办公室囤的无糖饮料", "把刚才那个饮料加入 100 件"],
+    "expected_intent": "purchase_help",
+    "expected_terms": ["购物车"],
+    "min_cards": 0,
+    "expected_cart": {"action": "add", "min_items": 1, "quantity": 100},
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_013",
+    "scenario": "cart_update",
+    "turns": ["帮我推荐 100 元以内控油定妆粉饼或散粉", "把刚才推荐的都加入购物车", "把第一个数量改成 3"],
+    "expected_intent": "purchase_help",
+    "expected_terms": ["购物车"],
+    "min_cards": 0,
+    "expected_cart": {"action": "update", "min_items": 1, "quantity": 3},
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_014",
+    "scenario": "cart_view",
+    "turns": ["帮我推荐 3500 以内适合学生记笔记和网课的平板", "把刚才推荐的都加入购物车", "查看购物车"],
+    "expected_intent": "purchase_help",
+    "expected_terms": ["购物车"],
+    "min_cards": 0,
+    "expected_cart": {"action": "view", "min_items": 1},
+    "expected_no_exact_match": false
+  },
+  {
+    "case_id": "guide_015",
+    "scenario": "cart_remove",
+    "turns": ["帮我推荐 300 以内适合通勤的鞋", "把刚才推荐的都加入购物车", "删除第一个"],
+    "expected_intent": "purchase_help",
+    "expected_terms": ["购物车"],
+    "min_cards": 0,
+    "expected_cart": {"action": "remove"},
+    "expected_no_exact_match": false
+  }
+]

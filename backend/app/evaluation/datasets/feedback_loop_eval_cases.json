@@ -1,0 +1,42 @@
+[
+  {
+    "case_id": "feedback_eval_001",
+    "query": "帮我推荐 3500 以内适合学生记笔记的平板",
+    "answer": "我更推荐这款学习平板，预算内，记笔记和网课都比较稳。",
+    "rating": 1,
+    "reason": "",
+    "products": ["p_tablet_001"]
+  },
+  {
+    "case_id": "feedback_eval_002",
+    "query": "帮我推荐 300 以内通勤鞋",
+    "answer": "这双鞋脚感不错，但价格明显超出你的 300 元预算。",
+    "rating": -1,
+    "reason": "太贵",
+    "products": ["p_shoes_001"]
+  },
+  {
+    "case_id": "feedback_eval_003",
+    "query": "找 100 元以内控油粉饼",
+    "answer": "我给你推荐一款精华，修护维稳比较好。",
+    "rating": -1,
+    "reason": "不相关",
+    "products": ["p_beauty_001"]
+  },
+  {
+    "case_id": "feedback_eval_004",
+    "query": "这两款精华哪个更适合敏感肌？",
+    "answer": "两款都还可以，建议你自己看看。",
+    "rating": -1,
+    "reason": "解释不清",
+    "products": ["p_beauty_002", "p_beauty_004"]
+  },
+  {
+    "case_id": "feedback_eval_005",
+    "query": "帮我把刚才推荐的饮料加入购物车",
+    "answer": "已加入购物车，当前购物车里有 1 件商品。",
+    "rating": 1,
+    "reason": "",
+    "products": ["p_food_001"]
+  }
+]

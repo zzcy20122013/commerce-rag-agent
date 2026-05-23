@@ -181,7 +181,6 @@ fun MainScreen(
                 currentSessionId = sessionId
                 sessionViewModel.refresh()
             },
-            onNewChat = { startNewChat() },
             newChatSignal = newChatSignal
         )
     }
