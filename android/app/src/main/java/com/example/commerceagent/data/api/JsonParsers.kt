@@ -2,6 +2,9 @@ package com.example.commerceagent.data.api
 
 import com.example.commerceagent.data.model.ProductCard
 import com.example.commerceagent.data.model.ProductDetail
+import com.example.commerceagent.data.model.Cart
+import com.example.commerceagent.data.model.CartItem
+import com.example.commerceagent.data.model.CartProduct
 import com.example.commerceagent.data.model.Session
 import com.example.commerceagent.data.model.SessionMessage
 import org.json.JSONArray
@@ -36,6 +39,30 @@ fun JSONObject.toProductDetail(): ProductDetail {
         sales = optInt("sales"),
         stock = optInt("stock"),
         imageUrl = optString("image_url")
+    )
+}
+
+fun JSONObject.toCart(): Cart {
+    val itemsJson = optJSONArray("items") ?: JSONArray()
+    return Cart(
+        items = List(itemsJson.length()) { index -> itemsJson.getJSONObject(index).toCartItem() },
+        total = optInt("total")
+    )
+}
+
+private fun JSONObject.toCartItem(): CartItem {
+    val productJson = optJSONObject("product") ?: JSONObject()
+    return CartItem(
+        id = optString("id"),
+        quantity = optInt("quantity"),
+        subtotal = optInt("subtotal"),
+        product = CartProduct(
+            id = productJson.optString("id"),
+            title = productJson.optString("title"),
+            price = productJson.optInt("price"),
+            stock = productJson.optInt("stock"),
+            imageUrl = productJson.optString("image_url")
+        )
     )
 }
 

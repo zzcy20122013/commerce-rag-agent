@@ -79,6 +79,17 @@ class Order(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
+class CartItem(Base):
+    __tablename__ = "cart_items"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), index=True, nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
 class ChatSession(Base):
     __tablename__ = "sessions"
 

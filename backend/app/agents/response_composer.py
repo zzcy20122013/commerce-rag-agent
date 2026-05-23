@@ -12,6 +12,16 @@ def compose_agent_response(
     draft_answer = str(result.get("answer") or "").strip()
     if not draft_answer:
         return result
+    if str(result.get("intent", "")).strip().lower() in {"purchase_help"}:
+        composed = deepcopy(result)
+        composed["response_composer"] = {
+            "llm_enabled": False,
+            "llm_error": None,
+        }
+        composed["trace"] = list(result.get("trace", [])) + [
+            {"node": "response_composer", "llm_enabled": False, "reason": "transactional_answer_preserved"}
+        ]
+        return composed
 
     composed = deepcopy(result)
     generation = generate_response_composer_result(

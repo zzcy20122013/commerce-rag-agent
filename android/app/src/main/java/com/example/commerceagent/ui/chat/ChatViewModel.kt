@@ -5,9 +5,11 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.commerceagent.data.api.UploadApi
+import com.example.commerceagent.data.model.CartItem
 import com.example.commerceagent.data.model.ChatMessage
 import com.example.commerceagent.data.model.MessageRole
 import com.example.commerceagent.data.model.SseEvent
+import com.example.commerceagent.data.repository.CartRepository
 import com.example.commerceagent.data.repository.ChatRepository
 import com.example.commerceagent.data.repository.FeedbackRepository
 import com.example.commerceagent.data.repository.SessionRepository
@@ -25,12 +27,16 @@ data class ChatUiState(
     val sessionId: String? = null,
     val uploadId: String? = null,
     val previewUrl: String? = null,
+    val cartItems: List<CartItem> = emptyList(),
+    val cartTotal: Int = 0,
+    val isCartLoading: Boolean = false,
     val error: String? = null
 )
 
 class ChatViewModel(
     private val repository: ChatRepository = ChatRepository(),
     private val uploadApi: UploadApi = UploadApi(),
+    private val cartRepository: CartRepository = CartRepository(),
     private val feedbackRepository: FeedbackRepository = FeedbackRepository(),
     private val sessionRepository: SessionRepository = SessionRepository()
 ) : ViewModel() {
@@ -87,6 +93,84 @@ class ChatViewModel(
         sendText(text.trim())
     }
 
+    fun loadCart() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isCartLoading = true)
+            runCatching { cartRepository.getCart() }
+                .onSuccess { cart ->
+                    _state.value = _state.value.copy(
+                        cartItems = cart.items,
+                        cartTotal = cart.total,
+                        isCartLoading = false,
+                        error = null
+                    )
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message, isCartLoading = false) }
+        }
+    }
+
+    fun addProductToCart(productId: String) {
+        if (productId.isBlank()) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isCartLoading = true)
+            runCatching { cartRepository.addItem(productId, quantity = 1) }
+                .onSuccess { cart ->
+                    val addedItem = cart.items.firstOrNull { it.product.id == productId }
+                    val title = addedItem?.product?.title?.takeIf { it.isNotBlank() } ?: "这件商品"
+                    val quantity = addedItem?.quantity ?: 1
+                    _state.value = _state.value.copy(
+                        cartItems = cart.items,
+                        cartTotal = cart.total,
+                        isCartLoading = false,
+                        error = null,
+                        messages = _state.value.messages + ChatMessage(
+                            id = "cart_notice_${UUID.randomUUID().toString().take(8)}",
+                            role = MessageRole.Assistant,
+                            content = "已把「$title」加入购物车。当前这款是 $quantity 件，购物车合计约 ${cart.total} 元。"
+                        )
+                    )
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message, isCartLoading = false) }
+        }
+    }
+
+    fun updateCartQuantity(position: Int, quantity: Int) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isCartLoading = true)
+            val result = if (quantity <= 0) {
+                runCatching { cartRepository.removeItem(position) }
+            } else {
+                runCatching { cartRepository.updateItem(position, quantity) }
+            }
+            result
+                .onSuccess { cart ->
+                    _state.value = _state.value.copy(
+                        cartItems = cart.items,
+                        cartTotal = cart.total,
+                        isCartLoading = false,
+                        error = null
+                    )
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message, isCartLoading = false) }
+        }
+    }
+
+    fun removeCartItem(position: Int) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isCartLoading = true)
+            runCatching { cartRepository.removeItem(position) }
+                .onSuccess { cart ->
+                    _state.value = _state.value.copy(
+                        cartItems = cart.items,
+                        cartTotal = cart.total,
+                        isCartLoading = false,
+                        error = null
+                    )
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message, isCartLoading = false) }
+        }
+    }
+
     private fun sendText(text: String) {
         if (text.isBlank() || state.value.isSending) return
         val assistantTempId = "assistant_${UUID.randomUUID().toString().take(8)}"
@@ -119,10 +203,17 @@ class ChatViewModel(
         }
     }
 
-    fun sendFeedback(messageId: String, rating: Int) {
+    fun sendFeedback(messageId: String, rating: Int, reason: String = "") {
         viewModelScope.launch {
-            runCatching { feedbackRepository.submit(messageId, rating) }
-                .onSuccess { updateAssistant(messageId) { it.copy(feedbackRating = rating) } }
+            runCatching { feedbackRepository.submit(messageId, rating, reason) }
+                .onSuccess {
+                    updateAssistant(messageId) {
+                        it.copy(
+                            feedbackRating = rating,
+                            feedbackReason = reason.takeIf { value -> value.isNotBlank() }
+                        )
+                    }
+                }
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
         }
     }
@@ -132,7 +223,7 @@ class ChatViewModel(
         _state.value = _state.value.copy(
             sessionId = event.sessionId ?: _state.value.sessionId,
             messages = _state.value.messages.map {
-                if (it.id == tempId) {
+                if (it.id == tempId || it.id == resolvedId) {
                     it.copy(
                         id = resolvedId,
                         content = it.content + event.delta,

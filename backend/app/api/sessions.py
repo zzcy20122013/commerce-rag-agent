@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.db import get_db, init_db
 from app.models.tables import ChatSession
-from app.services.session_service import delete_session, ensure_session, list_session_messages, list_sessions
+from app.services.session_service import delete_session, ensure_session, list_session_messages, list_sessions, update_session_title
 
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -12,6 +12,10 @@ router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 class CreateSessionRequest(BaseModel):
     title: str = "导购会话"
+
+
+class UpdateSessionRequest(BaseModel):
+    title: str
 
 
 @router.get("")
@@ -34,6 +38,24 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
     session.title = payload.title
     db.commit()
     db.refresh(session)
+    return {
+        "id": session.id,
+        "title": session.title,
+        "updatedAt": session.updated_at.isoformat(),
+    }
+
+
+@router.put("/{session_id}")
+def update_session(session_id: str, payload: UpdateSessionRequest, db: Session = Depends(get_db)) -> dict:
+    init_db()
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Session title cannot be empty")
+
+    session = update_session_title(db, session_id=session_id, title=title)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
     return {
         "id": session.id,
         "title": session.title,

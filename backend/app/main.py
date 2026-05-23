@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 from app.api.catalog import router as catalog_router
+from app.api.cart import router as cart_router
 from app.api.chat import router as chat_router
 from app.api.docs import router as docs_router
 from app.api.feedback import router as feedback_router
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     api.include_router(chat_router)
+    api.include_router(cart_router)
     api.include_router(catalog_router)
     api.include_router(docs_router)
     api.include_router(feedback_router)

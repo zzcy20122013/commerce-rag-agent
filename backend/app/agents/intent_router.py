@@ -23,7 +23,28 @@ def classify_intent(text: str) -> IntentResult:
     ):
         return IntentResult(intent="clarification", confidence=0.72, constraints=constraints)
 
-    if _contains_any(normalized, ["怎么购买", "如何购买", "怎么买", "购买流程", "怎么下单", "如何下单", "立即购买", "加入购物车", "checkout", "buy now"]):
+    if _contains_any(
+        normalized,
+        [
+            "怎么购买",
+            "如何购买",
+            "怎么买",
+            "购买流程",
+            "怎么下单",
+            "如何下单",
+            "立即购买",
+            "加入购物车",
+            "购物车",
+            "加购",
+            "删掉",
+            "删除第",
+            "移除第",
+            "数量改",
+            "改成",
+            "checkout",
+            "buy now",
+        ],
+    ):
         return IntentResult(intent="purchase_help", confidence=0.9, constraints=constraints)
 
     if _contains_any(normalized, ["订单", "物流", "快递", "到哪", "发货", "退货进度", "order", "shipping"]):

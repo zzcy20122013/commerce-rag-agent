@@ -4,7 +4,7 @@ import json
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models.tables import ChatSession, Feedback, Message, RecommendationLog, RetrievalLog
+from app.models.tables import ChatSession, Feedback, Message, RecommendationLog, RetrievalLog, utc_now
 
 
 def ensure_session(db: Session, *, session_id: str | None = None, user_id: str = "debug-user") -> ChatSession:
@@ -26,6 +26,114 @@ def list_sessions(db: Session, *, user_id: str = "debug-user") -> list[ChatSessi
         .order_by(ChatSession.updated_at.desc())
     )
     return list(db.scalars(statement).all())
+
+
+def update_session_title(db: Session, *, session_id: str, title: str) -> ChatSession | None:
+    session = db.get(ChatSession, session_id)
+    if not session:
+        return None
+
+    session.title = title
+    session.updated_at = utc_now()
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+def update_session_title_from_first_message(db: Session, *, session_id: str, message: str) -> ChatSession | None:
+    session = db.get(ChatSession, session_id)
+    if not session:
+        return None
+    if (session.title or "").strip() not in {"", "导购会话", "新导购会话"}:
+        return session
+
+    title = auto_title_from_first_user_message(message)
+    session.title = title
+    session.updated_at = utc_now()
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+def auto_title_from_first_user_message(message: str) -> str:
+    text = (message or "").strip()
+    if not text:
+        return "导购会话"
+
+    topic = _first_matching_topic(text)
+    modifier = _first_matching_modifier(text)
+    if topic and modifier and modifier not in topic:
+        return _fit_session_title(f"{modifier}{topic}选购")
+    if topic:
+        return _fit_session_title(f"{topic}选购")
+
+    cleaned = _clean_title_text(text)
+    return _fit_session_title(cleaned or "导购会话")
+
+
+def _first_matching_topic(text: str) -> str:
+    topics = [
+        "蓝牙耳机",
+        "降噪耳机",
+        "速干T恤",
+        "洗面奶",
+        "防晒霜",
+        "定妆粉",
+        "粉饼",
+        "散粉",
+        "精华",
+        "面霜",
+        "平板",
+        "电脑",
+        "手机",
+        "耳机",
+        "通勤鞋",
+        "跑鞋",
+        "鞋",
+        "背包",
+        "饮料",
+        "咖啡",
+        "麦片",
+        "方便面",
+    ]
+    for topic in topics:
+        if topic in text:
+            return topic
+    return ""
+
+
+def _first_matching_modifier(text: str) -> str:
+    modifiers = [
+        "敏感肌",
+        "油皮",
+        "学生",
+        "通勤",
+        "跑步",
+        "户外",
+        "办公室",
+        "早餐",
+        "无糖",
+        "低糖",
+        "轻便",
+    ]
+    for modifier in modifiers:
+        if modifier in text:
+            return modifier
+    return ""
+
+
+def _clean_title_text(text: str) -> str:
+    cleaned = text
+    for token in ["我想买", "帮我找", "帮我推荐", "推荐", "有没有", "有哪些", "一款", "一个", "适合"]:
+        cleaned = cleaned.replace(token, "")
+    for char in ["，", "。", "？", "?", "！", "!", ","]:
+        cleaned = cleaned.replace(char, " ")
+    return " ".join(cleaned.split())
+
+
+def _fit_session_title(title: str, max_length: int = 12) -> str:
+    compact = "".join(title.split())
+    return compact[:max_length] if len(compact) > max_length else compact
 
 
 def add_message(db: Session, *, session_id: str, role: str, content: str, metadata_json: str = "{}") -> Message:

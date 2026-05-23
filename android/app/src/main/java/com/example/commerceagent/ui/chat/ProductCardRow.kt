@@ -2,6 +2,7 @@ package com.example.commerceagent.ui.chat
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,14 +12,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,7 +34,12 @@ import com.example.commerceagent.data.api.ApiConfig
 import com.example.commerceagent.data.model.ProductCard
 
 @Composable
-fun ProductCardRow(cards: List<ProductCard>, onOpenProduct: (String) -> Unit) {
+fun ProductCardRow(
+    cards: List<ProductCard>,
+    cartQuantities: Map<String, Int>,
+    onOpenProduct: (String) -> Unit,
+    onAddToCart: (String) -> Unit
+) {
     Column(
         modifier = Modifier.padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -41,7 +52,9 @@ fun ProductCardRow(cards: List<ProductCard>, onOpenProduct: (String) -> Unit) {
                     1 -> "备选"
                     else -> "再看看"
                 },
-                onOpenProduct = onOpenProduct
+                quantityInCart = cartQuantities[card.productId] ?: 0,
+                onOpenProduct = onOpenProduct,
+                onAddToCart = onAddToCart
             )
         }
     }
@@ -51,7 +64,9 @@ fun ProductCardRow(cards: List<ProductCard>, onOpenProduct: (String) -> Unit) {
 private fun ProductRecommendationCard(
     card: ProductCard,
     badge: String,
-    onOpenProduct: (String) -> Unit
+    quantityInCart: Int,
+    onOpenProduct: (String) -> Unit,
+    onAddToCart: (String) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -65,14 +80,7 @@ private fun ProductRecommendationCard(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            AsyncImage(
-                model = ApiConfig.resolveUrl(card.imageUrl),
-                contentDescription = card.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(88.dp)
-                    .padding(end = 10.dp)
-            )
+            ProductCardImage(card = card)
             Spacer(Modifier.width(2.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Surface(
@@ -126,7 +134,46 @@ private fun ProductRecommendationCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                Spacer(Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = { onAddToCart(card.productId) },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.AddShoppingCart, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (quantityInCart > 0) "再加一件 · $quantityInCart" else "加入购物车")
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun ProductCardImage(card: ProductCard) {
+    val imageModifier = Modifier
+        .size(88.dp)
+        .padding(end = 10.dp)
+        .clip(RoundedCornerShape(12.dp))
+    if (card.imageUrl.isBlank()) {
+        Surface(
+            modifier = imageModifier,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = card.title.take(2),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    } else {
+        AsyncImage(
+            model = ApiConfig.resolveUrl(card.imageUrl),
+            contentDescription = card.title,
+            contentScale = ContentScale.Crop,
+            modifier = imageModifier
+        )
     }
 }

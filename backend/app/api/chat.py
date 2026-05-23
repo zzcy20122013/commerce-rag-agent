@@ -1,4 +1,5 @@
 import json
+import time
 from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends
@@ -13,7 +14,7 @@ from app.models.db import get_db, init_db
 from app.scripts.seed_products import seed_product_images, seed_products
 from app.services.image_service import resolve_upload_path
 from app.services.log_service import log_recommendation, log_retrieval
-from app.services.session_service import add_message, ensure_session, get_latest_memory
+from app.services.session_service import add_message, ensure_session, get_latest_memory, update_session_title_from_first_message
 
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -33,6 +34,7 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
     seed_product_images(db)
     session = ensure_session(db, session_id=payload.session_id)
     add_message(db, session_id=session.id, role="user", content=payload.message)
+    update_session_title_from_first_message(db, session_id=session.id, message=payload.message)
     session_memory = payload.memory if payload.memory is not None else get_latest_memory(db, session_id=session.id)
     if payload.upload_id:
         image_path = resolve_upload_path(payload.upload_id)
@@ -86,16 +88,15 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
     )
 
     def event_stream() -> Iterator[str]:
-        yield sse(
-            "message",
-            {
-                "content": result.get("answer", ""),
-                "message_id": assistant_message.id,
-                "session_id": session.id,
-                "memory": result.get("memory", {}),
-                "feedback_enabled": should_enable_feedback(result),
-            },
-        )
+        message_payload_base = {
+            "message_id": assistant_message.id,
+            "session_id": session.id,
+            "memory": result.get("memory", {}),
+            "feedback_enabled": should_enable_feedback(result),
+        }
+        for chunk in iter_answer_chunks(result.get("answer", "")):
+            yield sse("message", {**message_payload_base, "content": chunk})
+            time.sleep(0.045)
         yield sse("trace", result.get("trace", []))
         yield sse("product_cards", result.get("product_cards", []))
         if result.get("comparison"):
@@ -107,6 +108,15 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
 
 def sse(event: str, data: object) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def iter_answer_chunks(answer: str, chunk_size: int = 2) -> Iterator[str]:
+    text = answer or ""
+    if not text:
+        yield ""
+        return
+    for index in range(0, len(text), chunk_size):
+        yield text[index:index + chunk_size]
 
 
 def implies_missing_image(message: str) -> bool:

@@ -52,4 +52,26 @@ class SessionListViewModel(
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
         }
     }
+
+    fun renameSession(sessionId: String, newTitle: String) {
+        val title = newTitle.trim()
+        if (title.isBlank()) {
+            _state.value = _state.value.copy(error = "会话名称不能为空")
+            return
+        }
+
+        viewModelScope.launch {
+            runCatching { repository.renameSession(sessionId, title) }
+                .onSuccess { updatedSession ->
+                    _state.value = _state.value.copy(
+                        sessions = _state.value.sessions.map { session ->
+                            if (session.id == updatedSession.id) updatedSession else session
+                        },
+                        error = null
+                    )
+                    refresh()
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message) }
+        }
+    }
 }

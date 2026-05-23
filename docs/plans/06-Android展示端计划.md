@@ -24,7 +24,7 @@
 6. 商品卡片：`ui/chat/ProductCardRow.kt`。
 7. 图片上传入口和预览。
 8. 赞踩反馈入口，按后端 `feedback_enabled` 控制显示。
-9. 会话列表、新建会话、历史消息加载。
+9. 会话列表、新建会话、重命名会话、历史消息加载。
 10. 真实删除会话，调用 `DELETE /api/sessions/{id}`。
 11. SSE 错误收尾：失败时不再无限显示“正在思考...”，而是显示错误提示。
 12. Android 模拟器访问本机后端：`http://10.0.2.2:8000`。
@@ -275,4 +275,5 @@ Android 开发前，后端需要稳定提供：
 - `GET /api/sessions`
 - `POST /api/sessions`
 - `GET /api/sessions/{id}/messages`
+- `PUT /api/sessions/{id}`
 - `DELETE /api/sessions/{id}`

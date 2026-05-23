@@ -778,61 +778,78 @@ agent/
         docs.py
         catalog.py
         products.py
-        orders.py
         sessions.py
         feedback.py
+        cart.py
       agents/
         graph.py
         intent_router.py
         shopping_guide.py
         product_knowledge.py
         compare.py
+        decision_guide.py
         faq.py
         order.py
+        purchase.py
         multimodal.py
         chitchat.py
+        response_composer.py
       retrieval/
         text_index.py
-        document_index.py
         image_index.py
         retrievers.py
         reranker.py
       llm/
         openai_compatible_client.py
-        prompts.py
+        generation.py
+        prompt_registry.py
+        prompt_blocks.py
       embeddings/
         bge_m3.py
         chinese_clip.py
       services/
         catalog_import_service.py
         product_service.py
-        order_service.py
         session_service.py
+        cart_service.py
+        order_service.py
         document_service.py
         feedback_service.py
+        image_service.py
         index_job_service.py
+        json_dataset_import_service.py
+        taxonomy.py
       models/
         db.py
+        tables.py
         schemas.py
       data/
-        app.sqlite
         catalog/
         chroma/
         product_images/
-        docs/
-        imports/
+        uploads/
       tests/
-        test_chat.py
-        test_retrieval.py
-        test_agents.py
+        test_session_history.py
+        test_response_composer.py
+        test_cart_api.py
+        test_cart_service.py
+        test_purchase_cart_agent.py
   web-debug/
     src/
   android/
     app/
+      src/main/java/com/example/commerceagent/
+        data/
+        ui/
   docs/
-    architecture.md
-    api.md
-    evaluation.md
+    architecture/
+    developer/
+    evaluation/
+    plans/
+    project/
+  scripts/
+  models/
+  outputs/
 ```
 
 ## 12. 方案总结
@@ -843,6 +860,6 @@ agent/
 
 最终目标不是做一个普通聊天机器人，而是做一个可以解释推荐理由、能看图找货、能持续从用户反馈中改进的电商智能导购 Agent。
 
-本方案保持理想目标状态：真实商品平台可通过商品导入和索引构建流程持续扩容；Web Debug 用于工程调试；Demo Showcase 和 Android 端用于正式展示；Agent 层负责意图理解、咨询问答和决策辅助；RAG 与多模态检索层负责让回答建立在商品数据、知识文档和视觉相似度之上。
+本方案保持理想目标状态：真实商品平台可通过商品导入和索引构建流程持续扩容；Web Debug 用于工程调试；Android 端用于项目路演和移动端体验验证；Agent 层负责意图理解、咨询问答和决策辅助；RAG 与多模态检索层负责让回答建立在商品数据、知识文档和视觉相似度之上。
 
 

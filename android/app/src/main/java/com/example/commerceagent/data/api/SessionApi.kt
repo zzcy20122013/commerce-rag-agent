@@ -62,4 +62,23 @@ class SessionApi(
             if (!response.isSuccessful) error("会话删除失败：${response.code}")
         }
     }
+
+    suspend fun updateSession(sessionId: String, title: String): Session = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("title", title)
+            .toString()
+            .toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url("${ApiConfig.BASE_URL}/api/sessions/$sessionId")
+            .put(body)
+            .build()
+        client.newCall(request).execute().use { response ->
+            val responseText = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val detail = responseText.takeIf { it.isNotBlank() }?.let { "，$it" }.orEmpty()
+                error("会话更新失败：${response.code}$detail")
+            }
+            JSONObject(responseText).toSession()
+        }
+    }
 }

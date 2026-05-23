@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,12 +21,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.commerceagent.data.api.ApiConfig
+import com.example.commerceagent.data.model.CartItem
 
 private val quickPrompts = listOf(
     "推荐 3500 以内学生记笔记平板",
@@ -38,16 +43,22 @@ fun ChatScreen(
     sessionId: String?,
     onOpenProduct: (String) -> Unit,
     onMenuClick: () -> Unit,
+    onSessionChanged: (String) -> Unit,
+    onNewChat: () -> Unit,
     newChatSignal: Int,
     viewModel: ChatViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    var showCartSheet by remember { mutableStateOf(false) }
+    val cartQuantities = remember(state.cartItems) {
+        state.cartItems.associate { it.product.id to it.quantity }
+    }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) viewModel.uploadImage(context.contentResolver, uri)
     }
-    
+
     val background = Brush.verticalGradient(
         colors = listOf(Color(0xFFF8F9FF), Color(0xFFFFFFFF))
     )
@@ -55,16 +66,33 @@ fun ChatScreen(
     LaunchedEffect(sessionId) {
         viewModel.setSession(sessionId)
     }
+    LaunchedEffect(Unit) {
+        viewModel.loadCart()
+    }
     LaunchedEffect(newChatSignal) {
         if (newChatSignal > 0) {
             viewModel.startNewChat()
+        }
+    }
+    LaunchedEffect(state.sessionId) {
+        val resolvedSessionId = state.sessionId
+        if (resolvedSessionId != null && resolvedSessionId != sessionId) {
+            onSessionChanged(resolvedSessionId)
         }
     }
 
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            ChatTopBar(onMenuClick = onMenuClick, onNewChat = { viewModel.startNewChat() })
+            ChatTopBar(
+                onMenuClick = onMenuClick,
+                cartCount = state.cartItems.sumOf { it.quantity },
+                onViewCart = {
+                    viewModel.loadCart()
+                    showCartSheet = true
+                },
+                onNewChat = onNewChat
+            )
         },
         bottomBar = {
             ChatInputBar(
@@ -101,7 +129,9 @@ fun ChatScreen(
                     items(state.messages, key = { it.id }) { message ->
                         MessageBubble(
                             message = message,
+                            cartQuantities = cartQuantities,
                             onOpenProduct = onOpenProduct,
+                            onAddToCart = viewModel::addProductToCart,
                             onFeedback = viewModel::sendFeedback
                         )
                     }
@@ -110,11 +140,28 @@ fun ChatScreen(
             }
         }
     }
+
+    if (showCartSheet) {
+        CartBottomSheet(
+            items = state.cartItems,
+            total = state.cartTotal,
+            isLoading = state.isCartLoading,
+            onDismiss = { showCartSheet = false },
+            onDecrease = { position, quantity -> viewModel.updateCartQuantity(position, quantity - 1) },
+            onIncrease = { position, quantity -> viewModel.updateCartQuantity(position, quantity + 1) },
+            onRemove = viewModel::removeCartItem
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChatTopBar(onMenuClick: () -> Unit, onNewChat: () -> Unit) {
+private fun ChatTopBar(
+    onMenuClick: () -> Unit,
+    cartCount: Int,
+    onViewCart: () -> Unit,
+    onNewChat: () -> Unit
+) {
     CenterAlignedTopAppBar(
         title = {
             Text(
@@ -129,6 +176,17 @@ private fun ChatTopBar(onMenuClick: () -> Unit, onNewChat: () -> Unit) {
             }
         },
         actions = {
+            IconButton(onClick = onViewCart) {
+                BadgedBox(
+                    badge = {
+                        if (cartCount > 0) {
+                            Badge { Text(cartCount.coerceAtMost(99).toString()) }
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.ShoppingCart, contentDescription = "查看购物车")
+                }
+            }
             IconButton(onClick = onNewChat) {
                 Icon(Icons.Default.Add, contentDescription = "新对话")
             }
@@ -137,6 +195,170 @@ private fun ChatTopBar(onMenuClick: () -> Unit, onNewChat: () -> Unit) {
             containerColor = Color.Transparent
         )
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CartBottomSheet(
+    items: List<CartItem>,
+    total: Int,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onDecrease: (Int, Int) -> Unit,
+    onIncrease: (Int, Int) -> Unit,
+    onRemove: (Int) -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("购物车", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (items.isEmpty()) "还没有加购商品" else "共 ${items.sumOf { it.quantity }} 件商品",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray
+                    )
+                }
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+
+            if (items.isEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFF6F3FF)
+                ) {
+                    Text(
+                        "看到合适的商品后，点商品卡片里的“加入购物车”就会出现在这里。",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items.forEachIndexed { index, item ->
+                        CartItemRow(
+                            item = item,
+                            position = index + 1,
+                            onDecrease = onDecrease,
+                            onIncrease = onIncrease,
+                            onRemove = onRemove
+                        )
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("合计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "￥$total",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CartItemRow(
+    item: CartItem,
+    position: Int,
+    onDecrease: (Int, Int) -> Unit,
+    onIncrease: (Int, Int) -> Unit,
+    onRemove: (Int) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CartProductImage(item)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    item.product.title,
+                    maxLines = 2,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "￥${item.product.price} · 小计 ￥${item.subtotal}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { onDecrease(position, item.quantity) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "减少数量", modifier = Modifier.size(18.dp))
+                    }
+                    Text(
+                        item.quantity.toString(),
+                        modifier = Modifier.widthIn(min = 32.dp),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    IconButton(
+                        onClick = { onIncrease(position, item.quantity) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "增加数量", modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+            IconButton(onClick = { onRemove(position) }) {
+                Icon(Icons.Default.DeleteOutline, contentDescription = "删除商品")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CartProductImage(item: CartItem) {
+    val modifier = Modifier
+        .size(56.dp)
+        .clip(RoundedCornerShape(12.dp))
+    if (item.product.imageUrl.isBlank()) {
+        Surface(modifier = modifier, color = Color(0xFFF0EAFF)) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(item.product.title.take(2), color = Color(0xFF5B35EA), fontWeight = FontWeight.Bold)
+            }
+        }
+    } else {
+        AsyncImage(
+            model = ApiConfig.resolveUrl(item.product.imageUrl),
+            contentDescription = item.product.title,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+        )
+    }
 }
 
 @Composable
@@ -208,13 +430,13 @@ private fun ChatInputBar(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
-            color = Color(0xFFF7F7F7),
-            border = BorderStroke(1.dp, Color(0xFFEEEEEE))
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFFF2F2F7),
+            border = BorderStroke(1.dp, Color(0xFFE5E5EA))
         ) {
             Column {
                 if (previewUrl != null) {
@@ -222,40 +444,73 @@ private fun ChatInputBar(
                         AsyncImage(
                             model = previewUrl,
                             contentDescription = null,
-                            modifier = Modifier.size(60.dp).clip(RoundedCornerShape(12.dp)),
+                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
                             contentScale = ContentScale.Crop
                         )
                     }
                 }
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Bottom, // Allows TextField to grow upwards
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
                 ) {
-                    IconButton(onClick = onPickImage) {
-                        Icon(Icons.Default.Add, contentDescription = "上传图片", tint = Color.Gray)
+                    IconButton(
+                        onClick = onPickImage,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "上传图片", tint = Color(0xFF5B35EA))
                     }
+
                     TextField(
                         value = input,
                         onValueChange = onInput,
                         placeholder = { Text("输入您的问题...") },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = 4.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
+                            unfocusedIndicatorColor = Color.Transparent,
+                            cursorColor = Color(0xFF5B35EA)
                         ),
-                        maxLines = 5
+                        maxLines = 6
                     )
-                    IconButton(
-                        onClick = onSend,
-                        enabled = input.isNotBlank() && !isSending,
-                        colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = Color(0xFF5B35EA),
-                            disabledContentColor = Color.Gray
-                        )
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = "发送")
+
+                    Box(modifier = Modifier.padding(bottom = 4.dp, end = 4.dp)) {
+                        if (isSending) {
+                            IconButton(
+                                onClick = { /* TODO: Implement Stop */ },
+                                colors = IconButtonDefaults.iconButtonColors(
+                                    containerColor = Color(0xFF5B35EA),
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                // Using a simple Box as a square stop icon if Icons.Default.Stop is missing
+                                Box(
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .background(Color.White, RoundedCornerShape(2.dp))
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = onSend,
+                                enabled = input.isNotBlank(),
+                                colors = IconButtonDefaults.iconButtonColors(
+                                    containerColor = if (input.isNotBlank()) Color(0xFF5B35EA) else Color.Transparent,
+                                    contentColor = if (input.isNotBlank()) Color.White else Color.Gray
+                                ),
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "发送",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

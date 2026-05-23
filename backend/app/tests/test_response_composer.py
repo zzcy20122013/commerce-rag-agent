@@ -50,3 +50,23 @@ def test_response_composer_keeps_original_answer_when_llm_fails() -> None:
     assert composed["answer"] == "订单已发货，正在运输中。"
     assert composed["response_composer"]["llm_enabled"] is False
     assert "composer unavailable" in composed["response_composer"]["llm_error"]
+
+
+def test_response_composer_does_not_rewrite_purchase_cart_actions() -> None:
+    client = FakeChatClient("我改写了购物车数量。")
+    result = {
+        "intent": "purchase_help",
+        "answer": "已把第 1 个商品数量改成 2。当前购物车：通勤直筒裤 x 2。",
+        "memory": {},
+        "product_cards": [],
+        "retrieved_items": [],
+        "trace": [{"node": "purchase_help"}],
+    }
+
+    composed = compose_agent_response(query="把第一个数量改成2", result=result, client=client)
+
+    assert composed["answer"] == result["answer"]
+    assert composed["response_composer"]["llm_enabled"] is False
+    assert composed["trace"][-1]["node"] == "response_composer"
+    assert composed["trace"][-1]["reason"] == "transactional_answer_preserved"
+    assert client.messages == []

@@ -11,10 +11,11 @@ import org.json.JSONObject
 class FeedbackApi(
     private val client: OkHttpClient = OkHttpClient()
 ) {
-    suspend fun submit(messageId: String, rating: Int) = withContext(Dispatchers.IO) {
+    suspend fun submit(messageId: String, rating: Int, reason: String = "") = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("message_id", messageId)
             .put("rating", rating)
+            .put("reason", reason)
             .toString()
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()

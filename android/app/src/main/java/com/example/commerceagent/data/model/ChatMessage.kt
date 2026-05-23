@@ -7,7 +7,8 @@ data class ChatMessage(
     val productCards: List<ProductCard> = emptyList(),
     val isStreaming: Boolean = false,
     val feedbackEnabled: Boolean = false,
-    val feedbackRating: Int? = null
+    val feedbackRating: Int? = null,
+    val feedbackReason: String? = null
 )
 
 enum class MessageRole {

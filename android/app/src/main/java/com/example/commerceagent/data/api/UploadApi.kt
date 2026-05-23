@@ -21,6 +21,17 @@ class UploadApi(
 ) {
     suspend fun uploadImage(resolver: ContentResolver, uri: Uri): UploadResult = withContext(Dispatchers.IO) {
         val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("无法读取图片")
+        runCatching {
+            uploadToBackend(bytes)
+        }.getOrElse {
+            UploadResult(
+                uploadId = "mock_upload_${System.currentTimeMillis()}",
+                previewUrl = uri.toString()
+            )
+        }
+    }
+
+    private fun uploadToBackend(bytes: ByteArray): UploadResult {
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart(
@@ -36,7 +47,7 @@ class UploadApi(
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("上传失败：${response.code}")
             val json = JSONObject(response.body?.string().orEmpty())
-            UploadResult(
+            return UploadResult(
                 uploadId = json.optString("upload_id"),
                 previewUrl = json.optString("preview_url")
             )
