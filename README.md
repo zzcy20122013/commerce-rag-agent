@@ -4,13 +4,13 @@
 
 ## 当前结构
 
-- `backend/`：FastAPI Agent 服务，包含意图路由、RAG 检索、商品库、购物车、SSE 聊天接口和评测脚本。
-- `web-debug/`：React Web Debug 控制台，用来验证后端能力、SSE、trace、商品卡片和图片上传。
-- `android/`：Android Kotlin + Jetpack Compose 展示端代码，已包含登录页、聊天页、侧边栏会话、商品卡片、购物车入口、图片上传入口和反馈入口。
-- `docs/`：项目方案、计划、架构、评测报告和开发修改指南。
-- `scripts/`：常用启动、索引重建和检查脚本。
-- `models/`：本机模型缓存目录，不属于 GitHub 仓库内容。
-- `outputs/`：本地运行、评测或导出产物目录，不提交。
+- `backend/`：FastAPI Agent 后端服务。
+- `web-debug/`：React Web Debug 调试控制台。
+- `android/`：Kotlin + Jetpack Compose 移动端。
+- `docs/`：项目方案、计划、架构、评测和开发指南。
+- `scripts/`：启动、索引重建和检查脚本。
+- `models/`：本机模型缓存目录，不提交。
+- `outputs/`：本地运行和导出产物目录，不提交。
 
 更完整的目录说明见 [项目目录说明](docs/project/项目目录说明.md)。
 
