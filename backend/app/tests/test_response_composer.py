@@ -1,4 +1,4 @@
-from app.agents.response_composer import compose_agent_response
+from app.agents.response_composer import compose_agent_response, stream_response_composer_chunks
 from app.llm.prompt_registry import build_response_composer_messages
 
 
@@ -13,6 +13,19 @@ class FakeChatClient:
         if self.should_fail:
             raise RuntimeError("composer unavailable")
         return self.answer
+
+
+class FakeStreamClient:
+    def __init__(self, chunks: list[str] | None = None, *, should_fail: bool = False):
+        self.chunks = chunks or ["我会", "优先看", "第一款"]
+        self.should_fail = should_fail
+        self.messages = []
+
+    def stream_chat_sync(self, messages: list[dict[str, str]], *, temperature: float = 0.2):
+        self.messages = messages
+        if self.should_fail:
+            raise TimeoutError("stream timeout")
+        yield from self.chunks
 
 
 def test_response_composer_rewrites_visible_answer_with_llm() -> None:
@@ -90,3 +103,44 @@ def test_response_composer_prompt_keeps_guide_decision_rules() -> None:
     assert "没有严格符合条件" in system_prompt
     assert "商品卡片里的推荐理由" in system_prompt
     assert "不要写成检索报告" in system_prompt
+
+
+def test_response_composer_streams_llm_chunks_and_reports_metadata() -> None:
+    client = FakeStreamClient(["主推", "第一款"])
+    completed = {}
+    result = {
+        "intent": "shopping_guide",
+        "answer": "我会先看第一款。",
+        "memory": {},
+        "product_cards": [{"product_id": "p1", "title": "通勤鞋", "price": 269}],
+        "retrieved_items": [],
+        "trace": [{"node": "shopping_guide"}],
+    }
+
+    chunks = list(stream_response_composer_chunks(query="推荐通勤鞋", result=result, client=client, on_complete=completed.update))
+
+    assert chunks == ["主推", "第一款"]
+    assert completed["answer"] == "主推第一款"
+    assert completed["llm_enabled"] is True
+    assert completed["llm_error"] is None
+    assert "通勤鞋" in client.messages[1]["content"]
+
+
+def test_response_composer_stream_falls_back_when_streaming_fails() -> None:
+    client = FakeStreamClient(should_fail=True)
+    completed = {}
+    result = {
+        "intent": "shopping_guide",
+        "answer": "我会先看第一款。",
+        "memory": {},
+        "product_cards": [],
+        "retrieved_items": [],
+        "trace": [],
+    }
+
+    chunks = list(stream_response_composer_chunks(query="推荐通勤鞋", result=result, client=client, on_complete=completed.update))
+
+    assert "".join(chunks) == "我会先看第一款。"
+    assert completed["answer"] == "我会先看第一款。"
+    assert completed["llm_enabled"] is False
+    assert "stream timeout" in completed["llm_error"]

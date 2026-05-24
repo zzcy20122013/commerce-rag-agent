@@ -1,5 +1,7 @@
 import os
+import json
 from collections.abc import AsyncIterator
+from collections.abc import Iterator
 
 import httpx
 
@@ -33,6 +35,26 @@ class OpenAICompatibleClient:
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
+    def stream_chat_sync(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        temperature: float = 0.2,
+    ) -> Iterator[str]:
+        payload = self._payload(messages, temperature=temperature, stream=True)
+        with httpx.Client(timeout=self._stream_timeout()) as client:
+            with client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                headers=self._headers(),
+                json=payload,
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    chunk = parse_openai_stream_line(line)
+                    if chunk:
+                        yield chunk
+
     async def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.2) -> str:
         payload = self._payload(messages, temperature=temperature, stream=False)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -61,8 +83,9 @@ class OpenAICompatibleClient:
             ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
-                    if line.startswith("data: ") and line != "data: [DONE]":
-                        yield line.removeprefix("data: ")
+                    chunk = parse_openai_stream_line(line)
+                    if chunk:
+                        yield chunk
 
     def _payload(self, messages: list[dict[str, str]], *, temperature: float, stream: bool) -> dict:
         return {
@@ -79,3 +102,26 @@ class OpenAICompatibleClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+
+    def _stream_timeout(self) -> httpx.Timeout:
+        return httpx.Timeout(self.timeout, connect=min(self.timeout, 10.0), read=self.timeout)
+
+
+def parse_openai_stream_line(line: str) -> str:
+    if not line.startswith("data: "):
+        return ""
+    data = line.removeprefix("data: ").strip()
+    if not data or data == "[DONE]":
+        return ""
+    try:
+        payload = json.loads(data)
+    except json.JSONDecodeError:
+        return ""
+    choice = (payload.get("choices") or [{}])[0]
+    delta = choice.get("delta") or {}
+    if isinstance(delta, dict) and delta.get("content"):
+        return str(delta["content"])
+    message = choice.get("message") or {}
+    if isinstance(message, dict) and message.get("content"):
+        return str(message["content"])
+    return ""

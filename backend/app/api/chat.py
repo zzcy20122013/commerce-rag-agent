@@ -1,5 +1,4 @@
 import json
-import time
 from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends
@@ -7,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
-from app.agents.response_composer import compose_agent_response
+from app.agents.response_composer import attach_response_composer_trace, stream_response_composer_chunks
 from app.agents.multimodal import run_multimodal_search
 from app.agents.graph import run_agent
 from app.models.db import get_db, init_db
@@ -67,7 +66,6 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
                     {"node": "image_text_fallback", "reason": "image_reference_without_upload"}
                 ],
             }
-    result = compose_agent_response(query=payload.message, result=result)
     assistant_message = add_message(
         db,
         session_id=session.id,
@@ -91,15 +89,24 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
     )
 
     def event_stream() -> Iterator[str]:
+        nonlocal result
         message_payload_base = {
             "message_id": assistant_message.id,
             "session_id": session.id,
             "memory": result.get("memory", {}),
             "feedback_enabled": should_enable_feedback(result),
         }
-        for chunk in iter_answer_chunks(result.get("answer", "")):
+        stream_meta: dict = {}
+        for chunk in stream_response_composer_chunks(
+            query=payload.message,
+            result=result,
+            on_complete=stream_meta.update,
+        ):
             yield sse("message", {**message_payload_base, "content": chunk})
-            time.sleep(0.045)
+        result = attach_response_composer_trace(result, stream_meta)
+        assistant_message.content = result.get("answer", "")
+        assistant_message.metadata_json = json.dumps({"memory": result.get("memory", {})}, ensure_ascii=False)
+        db.commit()
         yield sse("trace", result.get("trace", []))
         yield sse("product_cards", result.get("product_cards", []))
         if result.get("comparison"):

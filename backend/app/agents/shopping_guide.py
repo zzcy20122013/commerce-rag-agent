@@ -386,6 +386,8 @@ def product_to_card(product: Product, memory: dict, rank: int) -> dict:
         "sales": product.sales,
         "stock_status": "in_stock" if product.stock > 0 else "out_of_stock",
         "reasons": list(dict.fromkeys(reasons))[:6],
+        "evidence": build_card_evidence(product, memory, reasons),
+        "source_summary": build_source_summary(product, reasons),
         "score": round(max(0.5, 0.95 - rank * 0.04), 2),
     }
 
@@ -447,6 +449,37 @@ def build_recommendation_answer(
 def format_card_reasons(card: dict, *, limit: int = 3) -> str:
     reasons = [str(reason) for reason in card.get("reasons", []) if str(reason).strip()]
     return "、".join(reasons[:limit])
+
+
+def build_card_evidence(product: Product, memory: dict, reasons: list[str]) -> list[dict]:
+    evidence = [
+        {
+            "source": "商品库结构化字段",
+            "detail": f"价格 {product.price} 元，评分 {product.rating:.1f}，销量 {product.sales}，库存 {product.stock}",
+        }
+    ]
+    if any(reason.startswith("预算") or reason.startswith("超预算") for reason in reasons):
+        evidence.append({"source": "用户约束匹配", "detail": f"预算约束：{memory.get('budget_max')} 元以内"})
+    matched_preferences = [
+        preference
+        for preference in memory.get("preferences", [])
+        if str(preference).lower() in _product_explain_text(product)
+    ]
+    if matched_preferences:
+        evidence.append({"source": "商品标题/描述/规格", "detail": f"命中偏好：{'、'.join(matched_preferences[:3])}"})
+    risk = format_review_risk_reason(product)
+    if risk:
+        evidence.append({"source": "用户评价摘要", "detail": risk})
+    return evidence
+
+
+def build_source_summary(product: Product, reasons: list[str]) -> str:
+    sources = ["商品库结构化字段"]
+    if any("差评提醒" in reason for reason in reasons):
+        sources.append("用户评价摘要")
+    if product.specs_json and product.specs_json != "{}":
+        sources.append("商品规格/知识字段")
+    return f"推荐依据：{'、'.join(dict.fromkeys(sources))}"
 
 
 def format_exclusion_intro(memory: dict) -> str:

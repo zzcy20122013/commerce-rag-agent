@@ -1,4 +1,4 @@
-from app.agents.shopping_guide import sort_products_for_memory
+from app.agents.shopping_guide import product_to_card, sort_products_for_memory
 from app.models.tables import Product
 from app.retrieval.text_index import product_to_text
 from app.services.json_dataset_import_service import build_knowledge_chunks, build_product_specs
@@ -162,3 +162,30 @@ def test_review_risk_can_lower_sensitive_skin_recommendation_rank() -> None:
     )
 
     assert ranked[0].id == "p_gentle"
+
+
+def test_product_card_contains_explainable_evidence_sources() -> None:
+    product = Product(
+        id="p_beauty_001",
+        title="温和修护精华",
+        category="美妆护肤",
+        brand="测试品牌",
+        price=219,
+        description="温和保湿，适合敏感肌",
+        specs_json='{"review_summary":{"negative_review_count":1,"negative_keywords":["刺痛"]}}',
+        rating=4.6,
+        sales=1200,
+        stock=8,
+        image_url="",
+    )
+
+    card = product_to_card(
+        product,
+        {"budget_max": 300, "preferences": ["敏感肌友好"]},
+        rank=1,
+    )
+
+    evidence = card["evidence"]
+    assert any(item["source"] == "商品库结构化字段" for item in evidence)
+    assert any(item["source"] == "用户评价摘要" for item in evidence)
+    assert "推荐依据" in card["source_summary"]
