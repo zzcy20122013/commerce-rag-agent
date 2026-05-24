@@ -6,6 +6,7 @@ from app.agents.intent_router import extract_shopping_constraints
 from app.llm.generation import generate_shopping_result
 from app.models.tables import Product
 from app.retrieval.text_index import TextIndex
+from app.services.constraint_parser import product_is_excluded
 from app.services.product_service import filter_products
 
 
@@ -20,6 +21,7 @@ MEMORY_FIELDS = [
     "strict_filter",
     "last_product_ids",
     "exclude_product_ids",
+    "exclusions",
 ]
 
 
@@ -35,7 +37,27 @@ def shopping_guide_node(db: Session):
             subcategory=memory.get("subcategory"),
             budget_max=memory.get("budget_max"),
         )
+        products, exclusion_trace = apply_exclusion_filters(products, memory)
         alternative_products = exclude_previous_products(products, memory)
+        if memory.get("exclusions") and not products:
+            cards: list[dict] = []
+            trace_item = {
+                "node": "shopping_guide",
+                "cards": [],
+                "llm_enabled": False,
+                "retrieval_mode": "all_excluded_by_negative_constraints",
+                **exclusion_trace,
+            }
+            return {
+                **state,
+                "constraints": effective_constraints,
+                "memory": memory,
+                "retrieved_items": [],
+                "product_cards": cards,
+                "no_exact_match": True,
+                "answer": build_all_excluded_answer(memory),
+                "trace": state.get("trace", []) + [trace_item],
+            }
         if memory.get("exclude_product_ids") and not alternative_products:
             cards: list[dict] = []
             answer = build_no_more_options_answer(memory)
@@ -104,6 +126,7 @@ def shopping_guide_node(db: Session):
             "node": "shopping_guide",
             "cards": [card["product_id"] for card in cards],
             "llm_enabled": generation.llm_enabled,
+            **exclusion_trace,
             **retrieval_trace,
         }
         if no_exact_match:
@@ -169,10 +192,31 @@ def build_effective_constraints(constraints: dict, memory: dict) -> dict:
         "preferences",
         "product_ids",
         "strict_filter",
+        "exclusions",
     ]:
         if memory.get(field):
             effective[field] = memory[field]
     return effective
+
+
+def apply_exclusion_filters(products: list[Product], memory: dict) -> tuple[list[Product], dict]:
+    exclusions = memory.get("exclusions") or []
+    if not exclusions:
+        return products, {"exclusion_count": 0, "excluded_by_constraints": []}
+    kept: list[Product] = []
+    removed: list[str] = []
+    for product in products:
+        if product_is_excluded(
+            product.title,
+            product.brand,
+            product.description,
+            product.specs_json or "",
+            exclusions,
+        ):
+            removed.append(product.id)
+        else:
+            kept.append(product)
+    return kept, {"exclusion_count": len(exclusions), "excluded_by_constraints": removed}
 
 
 def exclude_previous_products(products: list[Product], memory: dict) -> list[Product]:
@@ -270,12 +314,19 @@ def build_retrieval_query(query: str, memory: dict) -> str:
 def build_generation_memory(memory: dict, cards: list[dict], *, no_exact_match: bool) -> dict:
     generation_memory = dict(memory)
     generation_memory["no_exact_match"] = no_exact_match
+    answer_policies: list[str] = []
+    exclusion_summary = format_exclusion_summary(memory)
+    if exclusion_summary:
+        answer_policies.append(
+            f"用户有明确反选条件，必须说明已经避开：{exclusion_summary}。"
+            "不要推荐命中这些排除条件的商品，也不要把排除条件当成正向偏好。"
+        )
     if no_exact_match:
         budget = memory.get("budget_max")
         candidate_prices = [card["price"] for card in cards]
         lowest_price = min(candidate_prices) if candidate_prices else None
         gap = lowest_price - budget if budget and lowest_price else None
-        generation_memory["answer_policy"] = (
+        answer_policies.append(
             "没有严格符合预算和子品类的商品；不能把超预算备选说成预算内推荐。"
             "请先明确说明没有精确匹配，再解释为什么展示这些同子品类备选，"
             "给出预算差距、是否值得加预算、以及如果预算不变可以怎么调整需求。"
@@ -283,6 +334,8 @@ def build_generation_memory(memory: dict, cards: list[dict], *, no_exact_match: 
         )
         generation_memory["budget_gap_min"] = gap
         generation_memory["lowest_candidate_price"] = lowest_price
+    if answer_policies:
+        generation_memory["answer_policy"] = "\n".join(answer_policies)
     return generation_memory
 
 
@@ -354,6 +407,7 @@ def build_recommendation_answer(
                 "如果预算卡死，可以换成相邻品类再查；如果能调整预算，我建议先把预算放宽一点再选。"
             )
         return "我暂时没有找到完全符合条件的商品，可以放宽预算或换一个品类再试。"
+    exclusion_intro = format_exclusion_intro(memory)
     category = memory.get("category") or "商品"
     subcategory = memory.get("subcategory") or ""
     budget = f"{memory['budget_max']} 元以内" if memory.get("budget_max") else ""
@@ -364,6 +418,7 @@ def build_recommendation_answer(
         if lowest_price and memory.get("budget_max"):
             gap_text = f"我看到最接近的一款也要 {lowest_price} 元，比你的预算高 {lowest_price - memory['budget_max']} 元。"
         return (
+            f"{exclusion_intro}"
             f"你这个预算卡得比较紧，我暂时没找到严格符合 {budget}{subcategory or category} 的选择。"
             f"{gap_text}"
             "下面这些只能算同类里的加预算备选；如果预算不能提高，我更建议你放宽品牌、屏幕尺寸，或者等活动价/看二手。"
@@ -372,6 +427,7 @@ def build_recommendation_answer(
     top_reason_text = format_card_reasons(top_card)
     if len(cards) == 1:
         return (
+            f"{exclusion_intro}"
             f"我会先看这款：{top_card['title']}，价格是 {top_card['price']} 元。"
             f"{f'主推理由是{top_reason_text}。' if top_reason_text else ''}"
             "如果你想更稳一点，可以再补充预算、品牌偏好或不能接受的点，我再帮你缩小范围。"
@@ -379,6 +435,7 @@ def build_recommendation_answer(
     second_card = cards[1]
     second_reason_text = format_card_reasons(second_card, limit=2)
     return (
+        f"{exclusion_intro}"
         f"这几款里我会优先看 {top_card['title']}，价格 {top_card['price']} 元，"
         f"{f'主推理由是{top_reason_text}。' if top_reason_text else '整体更贴近你的需求。'}"
         f"如果你想留个备选，可以再看看 {second_card['title']}，它是 {second_card['price']} 元"
@@ -390,6 +447,20 @@ def build_recommendation_answer(
 def format_card_reasons(card: dict, *, limit: int = 3) -> str:
     reasons = [str(reason) for reason in card.get("reasons", []) if str(reason).strip()]
     return "、".join(reasons[:limit])
+
+
+def format_exclusion_intro(memory: dict) -> str:
+    summary = format_exclusion_summary(memory)
+    return f"我已经帮你避开了{summary}，" if summary else ""
+
+
+def format_exclusion_summary(memory: dict) -> str:
+    values = [
+        str(item.get("value")).strip()
+        for item in memory.get("exclusions", [])
+        if str(item.get("value") or "").strip()
+    ]
+    return "、".join(list(dict.fromkeys(values))[:3])
 
 
 def _product_explain_text(product: Product) -> str:
@@ -422,6 +493,17 @@ def build_no_more_options_answer(memory: dict) -> str:
         f"我又帮你往下找了一圈，{budget}适合你的{category}选择确实不多。"
         f"刚才给你看的那几款已经算比较稳了，再硬找的话，要么会超预算比较多，要么就不太贴合{focus}。"
         "如果你想继续扩，我建议先放宽一个条件，比如预算、品牌、规格或使用场景。"
+    )
+
+
+def build_all_excluded_answer(memory: dict) -> str:
+    category = memory.get("subcategory") or memory.get("category") or "商品"
+    exclusions = [str(item.get("value")) for item in memory.get("exclusions", []) if item.get("value")]
+    exclusion_text = "、".join(exclusions[:3]) if exclusions else "这些排除条件"
+    return (
+        f"我按“不要 {exclusion_text}”帮你避开了一轮，但当前库里没有剩下特别合适的{category}。"
+        "这类条件我不建议硬凑推荐，容易踩到你明确不想要的点。"
+        "你可以放宽一个排除条件，或者换一个相邻品类，我再重新筛。"
     )
 
 

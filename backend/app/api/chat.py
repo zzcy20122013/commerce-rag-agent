@@ -12,6 +12,7 @@ from app.agents.multimodal import run_multimodal_search
 from app.agents.graph import run_agent
 from app.models.db import get_db, init_db
 from app.scripts.seed_products import seed_product_images, seed_products
+from app.services.constraint_parser import merge_exclusions, parse_constraints
 from app.services.image_service import resolve_upload_path
 from app.services.log_service import log_recommendation, log_retrieval
 from app.services.session_service import add_message, ensure_session, get_latest_memory, update_session_title_from_first_message
@@ -36,6 +37,8 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
     add_message(db, session_id=session.id, role="user", content=payload.message)
     update_session_title_from_first_message(db, session_id=session.id, message=payload.message)
     session_memory = payload.memory if payload.memory is not None else get_latest_memory(db, session_id=session.id)
+    constraint_result = parse_constraints(payload.message)
+    session_memory = apply_negative_constraints_to_memory(session_memory, constraint_result)
     if payload.upload_id:
         image_path = resolve_upload_path(payload.upload_id)
         if image_path:
@@ -108,6 +111,17 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
 
 def sse(event: str, data: object) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def apply_negative_constraints_to_memory(memory: dict | None, constraint_result: dict) -> dict:
+    updated = dict(memory or {})
+    exclusions = merge_exclusions(updated.get("exclusions", []), constraint_result.get("exclusions", []))
+    if exclusions:
+        updated["exclusions"] = exclusions
+    product_ids = constraint_result.get("exclude_product_ids") or []
+    if product_ids:
+        updated["exclude_product_ids"] = list(dict.fromkeys(updated.get("exclude_product_ids", []) + product_ids))
+    return updated
 
 
 def iter_answer_chunks(answer: str, chunk_size: int = 2) -> Iterator[str]:
