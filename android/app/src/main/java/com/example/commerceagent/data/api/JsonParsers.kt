@@ -7,6 +7,8 @@ import com.example.commerceagent.data.model.Cart
 import com.example.commerceagent.data.model.CartItem
 import com.example.commerceagent.data.model.CartProduct
 import com.example.commerceagent.data.model.CheckoutResult
+import com.example.commerceagent.data.model.Order
+import com.example.commerceagent.data.model.OrderItem
 import com.example.commerceagent.data.model.Session
 import com.example.commerceagent.data.model.SessionMessage
 import org.json.JSONArray
@@ -68,8 +70,10 @@ fun JSONObject.toCart(): Cart {
 fun JSONObject.toCheckoutResult(): CheckoutResult {
     val orderIdsJson = optJSONArray("order_ids") ?: JSONArray()
     val itemsJson = optJSONArray("items") ?: JSONArray()
+    val ordersJson = optJSONArray("orders") ?: JSONArray()
     return CheckoutResult(
         orderIds = List(orderIdsJson.length()) { index -> orderIdsJson.optString(index) },
+        orders = List(ordersJson.length()) { index -> ordersJson.getJSONObject(index).toOrder() },
         items = List(itemsJson.length()) { index -> itemsJson.getJSONObject(index).toCartItem() },
         total = optInt("total"),
         cart = (optJSONObject("cart") ?: JSONObject()).toCart()
@@ -79,6 +83,40 @@ fun JSONObject.toCheckoutResult(): CheckoutResult {
 private fun JSONObject.toCartItem(): CartItem {
     val productJson = optJSONObject("product") ?: JSONObject()
     return CartItem(
+        id = optString("id"),
+        quantity = optInt("quantity"),
+        subtotal = optInt("subtotal"),
+        product = CartProduct(
+            id = productJson.optString("id"),
+            title = productJson.optString("title"),
+            price = productJson.optInt("price"),
+            stock = productJson.optInt("stock"),
+            imageUrl = productJson.optString("image_url")
+        )
+    )
+}
+
+fun JSONObject.toOrderList(): List<Order> {
+    val ordersJson = optJSONArray("orders") ?: JSONArray()
+    return List(ordersJson.length()) { index -> ordersJson.getJSONObject(index).toOrder() }
+}
+
+fun JSONObject.toOrder(): Order {
+    val itemsJson = optJSONArray("items") ?: JSONArray()
+    return Order(
+        id = optString("id"),
+        status = optString("status"),
+        logisticsStatus = optString("logistics_status"),
+        returnStatus = optString("return_status"),
+        createdAt = optString("created_at"),
+        items = List(itemsJson.length()) { index -> itemsJson.getJSONObject(index).toOrderItem() },
+        total = optInt("total")
+    )
+}
+
+private fun JSONObject.toOrderItem(): OrderItem {
+    val productJson = optJSONObject("product") ?: JSONObject()
+    return OrderItem(
         id = optString("id"),
         quantity = optInt("quantity"),
         subtotal = optInt("subtotal"),

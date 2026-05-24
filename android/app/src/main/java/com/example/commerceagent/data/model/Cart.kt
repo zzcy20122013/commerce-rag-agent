@@ -7,6 +7,7 @@ data class Cart(
 
 data class CheckoutResult(
     val orderIds: List<String> = emptyList(),
+    val orders: List<Order> = emptyList(),
     val items: List<CartItem> = emptyList(),
     val total: Int = 0,
     val cart: Cart = Cart()

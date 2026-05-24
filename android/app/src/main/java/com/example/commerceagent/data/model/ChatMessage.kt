@@ -8,7 +8,9 @@ data class ChatMessage(
     val isStreaming: Boolean = false,
     val feedbackEnabled: Boolean = false,
     val feedbackRating: Int? = null,
-    val feedbackReason: String? = null
+    val feedbackReason: String? = null,
+    val networkError: Boolean = false,
+    val retryPrompt: String? = null
 )
 
 enum class MessageRole {

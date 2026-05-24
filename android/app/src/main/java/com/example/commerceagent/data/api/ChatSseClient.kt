@@ -43,7 +43,7 @@ class ChatSseClient(
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    emit(SseEvent.Error("请求失败：${response.code}"))
+                    emit(SseEvent.Error(parseHttpError(response.code, response.body?.string().orEmpty())))
                     return@use
                 }
                 val source = response.body?.source() ?: return@use
@@ -81,5 +81,14 @@ class ChatSseClient(
             "done" -> SseEvent.Done
             else -> null
         }
+    }
+
+    private fun parseHttpError(statusCode: Int, body: String): String {
+        return runCatching {
+            val error = JSONObject(body).optJSONObject("error")
+            val code = error?.optString("code").orEmpty()
+            val message = error?.optString("message").orEmpty()
+            listOf(code, message).filter { it.isNotBlank() }.joinToString("：")
+        }.getOrDefault("").ifBlank { "请求失败：$statusCode" }
     }
 }

@@ -8,6 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.commerceagent.ui.auth.LoginScreen
 import com.example.commerceagent.ui.main.MainScreen
+import com.example.commerceagent.ui.orders.OrdersScreen
 import com.example.commerceagent.ui.product.ProductDetailScreen
 
 @Composable
@@ -26,12 +27,16 @@ fun AppNavGraph() {
         composable("main") {
             MainScreen(
                 onOpenProduct = { productId -> navController.navigate("product/$productId") },
+                onOpenOrders = { navController.navigate("orders") },
                 onLogout = {
                     navController.navigate("login") {
                         popUpTo("main") { inclusive = true }
                     }
                 }
             )
+        }
+        composable("orders") {
+            OrdersScreen(onBack = { navController.popBackStack() })
         }
         composable(
             route = "product/{productId}",

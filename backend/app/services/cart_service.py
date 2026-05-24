@@ -3,7 +3,8 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.tables import CartItem, Order, Product, utc_now
+from app.models.tables import CartItem, Product, utc_now
+from app.services.order_service import create_order_from_cart_rows
 
 
 class CartServiceError(Exception):
@@ -155,20 +156,11 @@ def checkout_cart(db: Session, *, user_id: str = "debug-user") -> dict:
             raise InsufficientStockError(product.id, item.quantity, product.stock)
         checkout_items.append(_cart_item_payload(item, product))
 
-    order_ids = []
     total = sum(row["subtotal"] for row in checkout_items)
     for item, product in rows:
         product.stock -= item.quantity
-        order = Order(
-            id=f"ord_{uuid.uuid4().hex[:12]}",
-            user_id=user_id,
-            product_id=product.id,
-            status="已下单",
-            logistics_status="订单已提交，等待仓库出库。",
-            return_status="未申请退货",
-        )
-        db.add(order)
-        order_ids.append(order.id)
+    order = create_order_from_cart_rows(db, rows, user_id=user_id)
+    for item, _product in rows:
         db.delete(item)
     db.commit()
 
@@ -180,7 +172,8 @@ def checkout_cart(db: Session, *, user_id: str = "debug-user") -> dict:
         refreshed_items.append(refreshed)
 
     return {
-        "order_ids": order_ids,
+        "order_ids": [order["id"]],
+        "orders": [order],
         "items": refreshed_items,
         "total": total,
         "cart": {"items": [], "total": 0},

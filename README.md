@@ -19,11 +19,12 @@
 - 后端主链路：已跑通 `IntentRouter -> 各业务 Agent -> ResponseComposer -> SSE`。
 - 大模型回复：导购、决策、FAQ、闲聊和最终用户可见回答均为 Doubao 优先，失败时使用 fallback。
 - 会话能力：支持会话列表、新建会话、首轮消息自动命名、重命名会话、历史消息加载和真实删除会话。
-- 购物车与轻量下单闭环：支持通过对话或商品卡片加入购物车，支持查看、删除、修改数量、提交订单、扣减库存和售罄过滤。
+- 购物车与订单闭环：支持通过对话或商品卡片加入购物车，支持查看、删除、修改数量、提交订单、扣减库存、售罄过滤、订单查看、模拟支付、模拟发货、确认收货和退款售后。
 - Android 展示端：可在 Android Studio 模拟器运行，模拟器访问后端使用 `http://10.0.2.2:8000`。
 - Android 体验：支持商品卡片推荐依据展示、系统语音转文字入口、购物车查看和商品详情加购。
 - Android 离线兜底：后端不可用时可使用本地 Mock 数据验证聊天、商品卡片、商品详情、加购和提交订单入口。
 - 反馈闭环：Android 端按 `feedback_enabled` 显示赞踩，后端记录反馈数据。
+- 工程稳定性：支持统一错误响应、运行统计、SSE 断开统计、并发压测脚本和 Android 网络失败重试入口。
 - 评测与测试：已有 ResponseComposer、闲聊、反馈显示规则、会话历史/删除等后端测试。
 
 ## 本地模型目录
@@ -104,7 +105,15 @@ Android 是正式展示端，用于验证接近移动端产品形态的聊天、
 - `POST /api/cart/items`：加入购物车。
 - `PUT /api/cart/items/{position}`：按位置修改购物车商品数量。
 - `DELETE /api/cart/items/{position}`：按位置删除购物车商品。
-- `POST /api/cart/checkout`：提交购物车订单，校验并扣减库存，生成模拟订单后清空购物车。
+- `POST /api/cart/checkout`：提交购物车订单，校验并扣减库存，生成待支付订单后清空购物车。
+- `GET /api/orders`：查看订单列表。
+- `GET /api/orders/{id}`：查看订单详情。
+- `POST /api/orders/{id}/pay`：模拟支付。
+- `POST /api/orders/{id}/cancel`：取消待支付订单并释放库存。
+- `POST /api/orders/{id}/ship`：模拟发货。
+- `POST /api/orders/{id}/complete`：确认收货。
+- `POST /api/orders/{id}/refund`：模拟退款售后并回补库存。
+- `GET /api/runtime/stats`：查看本次后端进程内的请求、错误和 SSE 连接统计。
 
 ## 常用维护
 
@@ -125,6 +134,13 @@ Android 是正式展示端，用于验证接近移动端产品形态的聊天、
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe -m pytest app\tests -q
+```
+
+SSE 并发压测：
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m app.scripts.stress_sse --concurrency 5 --requests 10
 ```
 
 Android 构建：

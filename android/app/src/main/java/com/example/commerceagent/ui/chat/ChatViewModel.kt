@@ -194,12 +194,13 @@ class ChatViewModel(
             runCatching { cartRepository.checkout() }
                 .onSuccess { result ->
                     val orderText = result.orderIds.joinToString("、").ifBlank { "模拟订单" }
+                    val statusText = result.orders.firstOrNull()?.status ?: "待支付"
                     _state.value = _state.value.copy(
                         cartItems = result.cart.items,
                         cartTotal = result.cart.total,
                         isCartLoading = false,
                         error = null,
-                        cartNotice = "订单已提交：$orderText。库存已同步扣减，购物车已清空。"
+                        cartNotice = "订单已提交：$orderText，当前状态：$statusText。库存已同步锁定，购物车已清空。"
                     )
                 }
                 .onFailure { _state.value = _state.value.copy(error = it.message, isCartLoading = false) }
@@ -219,7 +220,7 @@ class ChatViewModel(
         viewModelScope.launch {
             repository.streamChat(text, state.value.sessionId, state.value.uploadId)
                 .catch { error ->
-                    failAssistant(assistantTempId, error.message ?: "网络异常，请稍后再试。")
+                    failAssistant(assistantTempId, text, error.message ?: "网络异常，请稍后再试。")
                 }
                 .collect { event ->
                     when (event) {
@@ -228,7 +229,7 @@ class ChatViewModel(
                             it.copy(productCards = event.cards, feedbackEnabled = it.feedbackEnabled || event.cards.isNotEmpty())
                         }
                         is SseEvent.Trace -> Unit
-                        is SseEvent.Error -> failAssistant(assistantTempId, event.message)
+                        is SseEvent.Error -> failAssistant(assistantTempId, text, event.message)
                         SseEvent.Done -> {
                             updateAssistant(assistantTempId) { it.copy(isStreaming = false) }
                             _state.value = _state.value.copy(isSending = false, uploadId = null, previewUrl = null)
@@ -236,6 +237,10 @@ class ChatViewModel(
                     }
                 }
         }
+    }
+
+    fun retryMessage(prompt: String) {
+        sendText(prompt.trim())
     }
 
     fun sendFeedback(messageId: String, rating: Int, reason: String = "") {
@@ -279,13 +284,9 @@ class ChatViewModel(
         )
     }
 
-    private fun failAssistant(messageId: String, message: String) {
+    private fun failAssistant(messageId: String, prompt: String, message: String) {
         updateAssistant(messageId) {
-            it.copy(
-                content = "这次请求没成功：$message",
-                isStreaming = false,
-                feedbackEnabled = false
-            )
+            buildFailedAssistantMessage(messageId = it.id, prompt = prompt, errorMessage = message)
         }
         _state.value = _state.value.copy(isSending = false, error = message)
     }
@@ -296,4 +297,16 @@ fun mergeVoiceTranscript(currentInput: String, transcript: String): String {
     if (cleanTranscript.isBlank()) return currentInput
     val cleanInput = currentInput.trim()
     return if (cleanInput.isBlank()) cleanTranscript else "$cleanInput $cleanTranscript"
+}
+
+fun buildFailedAssistantMessage(messageId: String, prompt: String, errorMessage: String): ChatMessage {
+    return ChatMessage(
+        id = messageId,
+        role = MessageRole.Assistant,
+        content = "这次请求没成功：$errorMessage",
+        isStreaming = false,
+        feedbackEnabled = false,
+        networkError = true,
+        retryPrompt = prompt
+    )
 }

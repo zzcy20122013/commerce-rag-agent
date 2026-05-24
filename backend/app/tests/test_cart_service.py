@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models.db import Base
-from app.models.tables import Order, Product
+from app.models.tables import Order, OrderItem, Product
 from app.services.cart_service import (
     add_cart_item,
     checkout_cart,
@@ -61,10 +61,13 @@ def test_checkout_cart_deducts_stock_creates_orders_and_clears_cart() -> None:
 
         assert result["total"] == 199 * 2 + 159
         assert result["cart"]["items"] == []
-        assert len(result["order_ids"]) == 2
+        assert len(result["order_ids"]) == 1
+        assert result["orders"][0]["status"] == "待支付"
+        assert len(result["orders"][0]["items"]) == 2
         assert db.get(Product, "p_pants_001").stock == 0
         assert db.get(Product, "p_pants_002").stock == 0
-        assert len(db.query(Order).all()) == 2
+        assert len(db.query(Order).all()) == 1
+        assert len(db.query(OrderItem).all()) == 2
         assert filter_products(db, category="服饰运动") == []
     finally:
         db.close()

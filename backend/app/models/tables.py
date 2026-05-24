@@ -79,6 +79,20 @@ class Order(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"), index=True, nullable=False)
+    product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    image_url: Mapped[str] = mapped_column(String(300), default="")
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    unit_price: Mapped[int] = mapped_column(Integer, nullable=False)
+    subtotal: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
 class CartItem(Base):
     __tablename__ = "cart_items"
 

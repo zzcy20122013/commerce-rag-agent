@@ -24,7 +24,10 @@ class MockCartStoreTest {
 
         val result = MockCartStore.checkout()
 
-        assertEquals(listOf("mock_ord_1"), result.orderIds)
+        assertEquals(1, result.orderIds.size)
+        assertEquals(1, result.orders.size)
+        assertEquals("待支付", result.orders[0].status)
+        assertEquals(2, result.orders[0].items[0].quantity)
         assertEquals(269 * 2, result.total)
         assertEquals(emptyList(), result.cart.items)
         assertEquals(emptyList(), MockCartStore.getCart().items)

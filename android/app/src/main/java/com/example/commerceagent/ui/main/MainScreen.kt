@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -30,6 +31,7 @@ import java.util.*
 fun MainScreen(
     initialSessionId: String? = null,
     onOpenProduct: (String) -> Unit,
+    onOpenOrders: () -> Unit,
     onLogout: () -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -160,6 +162,17 @@ fun MainScreen(
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
                 NavigationDrawerItem(
+                    icon = { Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = null) },
+                    label = { Text("我的订单") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onOpenOrders()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                NavigationDrawerItem(
                     icon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
                     label = { Text("退出登录") },
                     selected = false,
@@ -173,6 +186,7 @@ fun MainScreen(
         ChatScreen(
             sessionId = currentSessionId,
             onOpenProduct = onOpenProduct,
+            onOpenOrders = onOpenOrders,
             onMenuClick = {
                 sessionViewModel.refresh()
                 scope.launch { drawerState.open() }

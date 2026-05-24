@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -54,6 +55,7 @@ private val quickPrompts = listOf(
 fun ChatScreen(
     sessionId: String?,
     onOpenProduct: (String) -> Unit,
+    onOpenOrders: () -> Unit,
     onMenuClick: () -> Unit,
     onSessionChanged: (String) -> Unit,
     newChatSignal: Int,
@@ -155,7 +157,8 @@ fun ChatScreen(
                 onViewCart = {
                     viewModel.loadCart()
                     showCartSheet = true
-                }
+                },
+                onOpenOrders = onOpenOrders
             )
         },
         bottomBar = {
@@ -204,7 +207,8 @@ fun ChatScreen(
                             cartQuantities = cartQuantities,
                             onOpenProduct = onOpenProduct,
                             onAddToCart = viewModel::addProductToCart,
-                            onFeedback = viewModel::sendFeedback
+                            onFeedback = viewModel::sendFeedback,
+                            onRetry = viewModel::retryMessage
                         )
                     }
                     item { Spacer(Modifier.height(100.dp)) }
@@ -232,7 +236,8 @@ fun ChatScreen(
 private fun ChatTopBar(
     onMenuClick: () -> Unit,
     cartCount: Int,
-    onViewCart: () -> Unit
+    onViewCart: () -> Unit,
+    onOpenOrders: () -> Unit
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -248,6 +253,9 @@ private fun ChatTopBar(
             }
         },
         actions = {
+            IconButton(onClick = onOpenOrders) {
+                Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = "查看订单")
+            }
             IconButton(onClick = onViewCart) {
                 BadgedBox(
                     badge = {

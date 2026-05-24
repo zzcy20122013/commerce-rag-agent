@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends
@@ -14,10 +15,12 @@ from app.scripts.seed_products import seed_product_images, seed_products
 from app.services.constraint_parser import merge_exclusions, parse_constraints
 from app.services.image_service import resolve_upload_path
 from app.services.log_service import log_recommendation, log_retrieval
+from app.services.runtime_stats import runtime_stats
 from app.services.session_service import add_message, ensure_session, get_latest_memory, update_session_title_from_first_message
 
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+logger = logging.getLogger("commerce_rag_agent.sse")
 
 
 class ChatStreamRequest(BaseModel):
@@ -90,6 +93,8 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
 
     def event_stream() -> Iterator[str]:
         nonlocal result
+        runtime_stats.sse_opened()
+        completed = False
         message_payload_base = {
             "message_id": assistant_message.id,
             "session_id": session.id,
@@ -97,21 +102,42 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
             "feedback_enabled": should_enable_feedback(result),
         }
         stream_meta: dict = {}
-        for chunk in stream_response_composer_chunks(
-            query=payload.message,
-            result=result,
-            on_complete=stream_meta.update,
-        ):
-            yield sse("message", {**message_payload_base, "content": chunk})
-        result = attach_response_composer_trace(result, stream_meta)
-        assistant_message.content = result.get("answer", "")
-        assistant_message.metadata_json = json.dumps({"memory": result.get("memory", {})}, ensure_ascii=False)
-        db.commit()
-        yield sse("trace", result.get("trace", []))
-        yield sse("product_cards", result.get("product_cards", []))
-        if result.get("comparison"):
-            yield sse("comparison", result.get("comparison", {}))
-        yield sse("done", {"ok": True})
+        try:
+            for chunk in stream_response_composer_chunks(
+                query=payload.message,
+                result=result,
+                on_complete=stream_meta.update,
+            ):
+                yield sse("message", {**message_payload_base, "content": chunk})
+            result = attach_response_composer_trace(result, stream_meta)
+            assistant_message.content = result.get("answer", "")
+            assistant_message.metadata_json = json.dumps({"memory": result.get("memory", {})}, ensure_ascii=False)
+            db.commit()
+            yield sse("trace", result.get("trace", []))
+            yield sse("product_cards", result.get("product_cards", []))
+            if result.get("comparison"):
+                yield sse("comparison", result.get("comparison", {}))
+            completed = True
+            yield sse("done", {"ok": True})
+        except GeneratorExit:
+            logger.info("sse_disconnected session_id=%s message_id=%s", session.id, assistant_message.id)
+            runtime_stats.sse_disconnected()
+            raise
+        except Exception as error:
+            logger.exception("sse_stream_error session_id=%s message_id=%s", session.id, assistant_message.id)
+            runtime_stats.error_seen("SSE_STREAM_ERROR")
+            runtime_stats.sse_disconnected()
+            yield sse(
+                "error",
+                {
+                    "code": "SSE_STREAM_ERROR",
+                    "message": "流式回复中断，请稍后重试",
+                    "detail": {"type": type(error).__name__},
+                },
+            )
+        finally:
+            if completed:
+                runtime_stats.sse_completed()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

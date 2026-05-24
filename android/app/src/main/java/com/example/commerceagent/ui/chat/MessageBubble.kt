@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,7 +28,8 @@ fun MessageBubble(
     cartQuantities: Map<String, Int>,
     onOpenProduct: (String) -> Unit,
     onAddToCart: (String) -> Unit,
-    onFeedback: (String, Int, String) -> Unit
+    onFeedback: (String, Int, String) -> Unit,
+    onRetry: (String) -> Unit
 ) {
     val isUser = message.role == MessageRole.User
     val clipboardManager = LocalClipboardManager.current
@@ -121,6 +123,17 @@ fun MessageBubble(
                         onLike = { onFeedback(message.id, 1, "") },
                         onDislike = { reason -> onFeedback(message.id, -1, reason) }
                     )
+                }
+                if (!isUser && message.networkError && !message.retryPrompt.isNullOrBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    FilledTonalButton(
+                        onClick = { onRetry(message.retryPrompt) },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("重试")
+                    }
                 }
             }
         }
