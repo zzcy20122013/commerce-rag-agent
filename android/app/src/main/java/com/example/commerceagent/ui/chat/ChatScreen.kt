@@ -1,5 +1,11 @@
 package com.example.commerceagent.ui.chat
 
+import android.Manifest
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -31,9 +37,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.commerceagent.data.api.ApiConfig
 import com.example.commerceagent.data.model.CartItem
+import kotlinx.coroutines.launch
+import java.util.Locale
 
 private val quickPrompts = listOf(
     "推荐 3500 以内学生记笔记平板",
@@ -55,12 +64,47 @@ fun ChatScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
     var showCartSheet by remember { mutableStateOf(false) }
     val cartQuantities = remember(state.cartItems) {
         state.cartItems.associate { it.product.id to it.quantity }
     }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) viewModel.uploadImage(context.contentResolver, uri)
+    }
+    val voiceLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val transcript = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                .orEmpty()
+            if (transcript.isNotBlank()) {
+                viewModel.applyVoiceTranscript(transcript)
+            }
+        }
+    }
+    fun launchVoiceInput() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.SIMPLIFIED_CHINESE.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "请说出您的购物需求")
+        }
+        try {
+            voiceLauncher.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("当前设备没有可用的语音识别服务")
+            }
+        }
+    }
+    val voicePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            launchVoiceInput()
+        } else {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("需要麦克风权限才能使用语音输入")
+            }
+        }
     }
 
     val background = Brush.verticalGradient(
@@ -121,6 +165,14 @@ fun ChatScreen(
                 isSending = state.isSending,
                 onInput = viewModel::updateInput,
                 onPickImage = { imagePicker.launch("image/*") },
+                onVoiceInput = {
+                    val permission = Manifest.permission.RECORD_AUDIO
+                    if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
+                        launchVoiceInput()
+                    } else {
+                        voicePermissionLauncher.launch(permission)
+                    }
+                },
                 onSend = viewModel::send
             )
         }
@@ -169,7 +221,8 @@ fun ChatScreen(
             onDismiss = { showCartSheet = false },
             onDecrease = { position, quantity -> viewModel.updateCartQuantity(position, quantity - 1) },
             onIncrease = { position, quantity -> viewModel.updateCartQuantity(position, quantity + 1) },
-            onRemove = viewModel::removeCartItem
+            onRemove = viewModel::removeCartItem,
+            onCheckout = viewModel::checkoutCart
         )
     }
 }
@@ -222,7 +275,8 @@ private fun CartBottomSheet(
     onDismiss: () -> Unit,
     onDecrease: (Int, Int) -> Unit,
     onIncrease: (Int, Int) -> Unit,
-    onRemove: (Int) -> Unit
+    onRemove: (Int) -> Unit,
+    onCheckout: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -289,6 +343,17 @@ private fun CartBottomSheet(
                         color = MaterialTheme.colorScheme.tertiary,
                         fontWeight = FontWeight.Bold
                     )
+                }
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onCheckout,
+                    enabled = !isLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("提交订单并同步库存")
                 }
             }
         }
@@ -440,6 +505,7 @@ private fun ChatInputBar(
     isSending: Boolean,
     onInput: (String) -> Unit,
     onPickImage: () -> Unit,
+    onVoiceInput: () -> Unit,
     onSend: () -> Unit
 ) {
     Box(
@@ -511,20 +577,33 @@ private fun ChatInputBar(
                                 )
                             }
                         } else {
-                            IconButton(
-                                onClick = onSend,
-                                enabled = input.isNotBlank(),
-                                colors = IconButtonDefaults.iconButtonColors(
-                                    containerColor = if (input.isNotBlank()) Color(0xFF5B35EA) else Color.Transparent,
-                                    contentColor = if (input.isNotBlank()) Color.White else Color.Gray
-                                ),
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Send,
-                                    contentDescription = "发送",
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = onVoiceInput,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Mic,
+                                        contentDescription = "语音输入",
+                                        tint = Color(0xFF5B35EA),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = onSend,
+                                    enabled = input.isNotBlank(),
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = if (input.isNotBlank()) Color(0xFF5B35EA) else Color.Transparent,
+                                        contentColor = if (input.isNotBlank()) Color.White else Color.Gray
+                                    ),
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = "发送",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                     }

@@ -7,6 +7,7 @@ from app.agents.shopping_guide import product_to_card
 from app.models.tables import Product
 from app.services.cart_service import (
     add_cart_item,
+    InsufficientStockError,
     list_cart_items,
     remove_cart_item_by_position,
     update_cart_item_quantity_by_position,
@@ -36,7 +37,11 @@ def purchase_help_node(db: Session):
             position = resolve_cart_position(db, query) or 1
             quantity = extract_quantity(query) or 1
             product_name = cart_item_name_at(db, position)
-            updated = update_cart_item_quantity_by_position(db, position=position, quantity=quantity)
+            try:
+                updated = update_cart_item_quantity_by_position(db, position=position, quantity=quantity)
+            except InsufficientStockError as error:
+                answer = f"这款库存只有 {error.available} 件，不能改成 {error.requested} 件。我先不帮你乱改。"
+                return build_cart_state(state, db, answer_prefix=answer, trace_action="update_insufficient_stock")
             answer = (
                 f"已把{format_item_reference(position, product_name)}数量改成 {quantity}。"
                 if updated
@@ -57,8 +62,18 @@ def purchase_help_node(db: Session):
             }
 
         quantity = extract_add_quantity(query) or 1
+        current_quantities = {item["product"]["id"]: item["quantity"] for item in list_cart_items(db)}
         for product in selected_products:
-            add_cart_item(db, product_id=product.id, quantity=quantity)
+            requested = current_quantities.get(product.id, 0) + quantity
+            if requested > product.stock:
+                answer = f"这款库存只有 {product.stock} 件，不能加入 {requested} 件。我先不帮你超库存加购。"
+                return build_cart_state(state, db, answer_prefix=answer, trace_action="add_insufficient_stock")
+        try:
+            for product in selected_products:
+                add_cart_item(db, product_id=product.id, quantity=quantity)
+        except InsufficientStockError as error:
+            answer = f"这款库存只有 {error.available} 件，不能加入 {error.requested} 件。我先不帮你超库存加购。"
+            return build_cart_state(state, db, answer_prefix=answer, trace_action="add_insufficient_stock")
 
         cards = [product_to_card(product, memory, rank) for rank, product in enumerate(selected_products, start=1)]
         names = "、".join(product.title for product in selected_products)

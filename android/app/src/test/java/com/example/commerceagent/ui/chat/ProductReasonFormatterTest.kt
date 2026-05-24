@@ -33,4 +33,33 @@ class ProductReasonFormatterTest {
         assertEquals(listOf("适合通勤", "销量较高：1800"), ui.highlights)
         assertEquals(null, ui.risk)
     }
+
+    @Test
+    fun buildsCompactEvidenceLineFromSourceSummaryAndEvidence() {
+        val ui = buildProductEvidenceUi(
+            sourceSummary = "推荐依据：商品库结构化字段、用户评价摘要、商品规格/知识字段",
+            evidence = listOf(
+                ProductEvidenceUiItem("商品库结构化字段", "价格 269 元，库存充足"),
+                ProductEvidenceUiItem("用户评价摘要", "通勤脚感反馈较多"),
+                ProductEvidenceUiItem("商品规格/知识字段", "轻便缓震")
+            )
+        )
+
+        assertEquals("推荐依据：商品库结构化字段、用户评价摘要、商品规格/知识字段", ui.title)
+        assertEquals(listOf("商品库结构化字段", "用户评价摘要", "商品规格/知识字段"), ui.sources)
+        assertEquals("价格 269 元，库存充足", ui.highlight)
+    }
+
+    @Test
+    fun evidenceLineFallsBackToReasonsWhenEvidenceIsMissing() {
+        val ui = buildProductEvidenceUi(
+            sourceSummary = "",
+            evidence = emptyList(),
+            reasons = listOf("预算内", "适合通勤")
+        )
+
+        assertEquals("推荐依据：预算内、适合通勤", ui.title)
+        assertEquals(emptyList(), ui.sources)
+        assertEquals(null, ui.highlight)
+    }
 }

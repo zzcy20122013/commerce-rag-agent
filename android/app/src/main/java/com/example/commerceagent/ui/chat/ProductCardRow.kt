@@ -33,10 +33,22 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.commerceagent.data.api.ApiConfig
 import com.example.commerceagent.data.model.ProductCard
+import com.example.commerceagent.data.model.ProductEvidence
 
 data class ProductReasonUi(
     val highlights: List<String>,
     val risk: String?
+)
+
+data class ProductEvidenceUiItem(
+    val source: String,
+    val text: String
+)
+
+data class ProductEvidenceUi(
+    val title: String,
+    val sources: List<String>,
+    val highlight: String?
 )
 
 fun buildProductReasonUi(reasons: List<String>): ProductReasonUi {
@@ -49,6 +61,32 @@ fun buildProductReasonUi(reasons: List<String>): ProductReasonUi {
         .filter { it != risk }
         .take(4)
     return ProductReasonUi(highlights = highlights, risk = risk)
+}
+
+fun buildProductEvidenceUi(
+    sourceSummary: String,
+    evidence: List<ProductEvidenceUiItem>,
+    reasons: List<String> = emptyList()
+): ProductEvidenceUi {
+    val sources = evidence
+        .map { it.source.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+        .take(3)
+    val title = sourceSummary.trim().ifBlank {
+        reasons
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("差评提醒") && !it.contains("风险") }
+            .distinct()
+            .take(2)
+            .joinToString("、", prefix = "推荐依据：")
+            .takeIf { it != "推荐依据：" }
+            .orEmpty()
+    }
+    val highlight = evidence
+        .map { it.text.trim() }
+        .firstOrNull { it.isNotEmpty() }
+    return ProductEvidenceUi(title = title, sources = sources, highlight = highlight)
 }
 
 @Composable
@@ -87,6 +125,11 @@ private fun ProductRecommendationCard(
     onAddToCart: (String) -> Unit
 ) {
     val reasonUi = buildProductReasonUi(card.reasons)
+    val evidenceUi = buildProductEvidenceUi(
+        sourceSummary = card.sourceSummary,
+        evidence = card.evidence.map { it.toUiItem() },
+        reasons = card.reasons
+    )
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -179,6 +222,10 @@ private fun ProductRecommendationCard(
                         }
                     }
                 }
+                if (evidenceUi.title.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    ProductEvidenceBlock(evidenceUi = evidenceUi)
+                }
                 Spacer(Modifier.height(8.dp))
                 FilledTonalButton(
                     onClick = { onAddToCart(card.productId) },
@@ -188,6 +235,44 @@ private fun ProductRecommendationCard(
                     Spacer(Modifier.width(6.dp))
                     Text(if (quantityInCart > 0) "再加一件 · $quantityInCart" else "加入购物车")
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProductEvidenceBlock(evidenceUi: ProductEvidenceUi) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.42f),
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+            Text(
+                text = evidenceUi.title,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (evidenceUi.sources.isNotEmpty()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = evidenceUi.sources.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (!evidenceUi.highlight.isNullOrBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = evidenceUi.highlight,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -221,4 +306,8 @@ private fun ProductCardImage(card: ProductCard) {
             modifier = imageModifier
         )
     }
+}
+
+private fun ProductEvidence.toUiItem(): ProductEvidenceUiItem {
+    return ProductEvidenceUiItem(source = source, text = text)
 }

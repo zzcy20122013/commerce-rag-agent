@@ -87,6 +87,12 @@ class ChatViewModel(
         _state.value = _state.value.copy(input = value)
     }
 
+    fun applyVoiceTranscript(transcript: String) {
+        _state.value = _state.value.copy(
+            input = mergeVoiceTranscript(_state.value.input, transcript)
+        )
+    }
+
     fun uploadImage(resolver: ContentResolver, uri: Uri) {
         viewModelScope.launch {
             runCatching { uploadApi.uploadImage(resolver, uri) }
@@ -182,6 +188,24 @@ class ChatViewModel(
         }
     }
 
+    fun checkoutCart() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isCartLoading = true)
+            runCatching { cartRepository.checkout() }
+                .onSuccess { result ->
+                    val orderText = result.orderIds.joinToString("、").ifBlank { "模拟订单" }
+                    _state.value = _state.value.copy(
+                        cartItems = result.cart.items,
+                        cartTotal = result.cart.total,
+                        isCartLoading = false,
+                        error = null,
+                        cartNotice = "订单已提交：$orderText。库存已同步扣减，购物车已清空。"
+                    )
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message, isCartLoading = false) }
+        }
+    }
+
     private fun sendText(text: String) {
         if (text.isBlank() || state.value.isSending) return
         val assistantTempId = "assistant_${UUID.randomUUID().toString().take(8)}"
@@ -265,4 +289,11 @@ class ChatViewModel(
         }
         _state.value = _state.value.copy(isSending = false, error = message)
     }
+}
+
+fun mergeVoiceTranscript(currentInput: String, transcript: String): String {
+    val cleanTranscript = transcript.trim()
+    if (cleanTranscript.isBlank()) return currentInput
+    val cleanInput = currentInput.trim()
+    return if (cleanInput.isBlank()) cleanTranscript else "$cleanInput $cleanTranscript"
 }

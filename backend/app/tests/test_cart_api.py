@@ -46,7 +46,42 @@ def test_cart_api_add_list_update_and_remove(monkeypatch) -> None:
     assert client.get("/api/cart").json()["items"] == []
 
 
-def _product(product_id: str, title: str, price: int) -> Product:
+def test_cart_api_checkout_deducts_stock_and_clears_cart(monkeypatch) -> None:
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    db = TestingSession()
+    db.add(_product("p_pants_001", "通勤直筒长裤", 199, stock=2))
+    db.commit()
+    db.close()
+
+    def override_get_db():
+        request_db = TestingSession()
+        try:
+            yield request_db
+        finally:
+            request_db.close()
+
+    monkeypatch.setattr("app.api.cart.init_db", lambda: None)
+    app = FastAPI()
+    app.include_router(cart_router)
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+
+    assert client.post("/api/cart/items", json={"product_id": "p_pants_001", "quantity": 2}).status_code == 200
+    checked_out = client.post("/api/cart/checkout").json()
+
+    assert checked_out["cart"]["items"] == []
+    assert checked_out["total"] == 398
+    assert checked_out["items"][0]["product"]["stock"] == 0
+    assert len(checked_out["order_ids"]) == 1
+
+
+def _product(product_id: str, title: str, price: int, *, stock: int = 10) -> Product:
     return Product(
         id=product_id,
         title=title,
@@ -56,6 +91,6 @@ def _product(product_id: str, title: str, price: int) -> Product:
         description=title,
         rating=4.6,
         sales=1000,
-        stock=10,
+        stock=stock,
         image_url="",
     )

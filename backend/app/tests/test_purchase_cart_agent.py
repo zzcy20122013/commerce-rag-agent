@@ -102,7 +102,7 @@ def test_purchase_agent_adds_requested_quantity_for_single_product() -> None:
 
     db = TestingSession()
     try:
-        db.add(_product("p_food_020", "日清合味道海鲜风味杯面", 69))
+        db.add(_product("p_food_020", "日清合味道海鲜风味杯面", 69, stock=120))
         db.commit()
 
         node = purchase_help_node(db)
@@ -233,7 +233,7 @@ def test_purchase_agent_removes_cart_item_by_recent_position_phrase() -> None:
         db.close()
 
 
-def _product(product_id: str, title: str, price: int) -> Product:
+def _product(product_id: str, title: str, price: int, *, stock: int = 10) -> Product:
     return Product(
         id=product_id,
         title=title,
@@ -243,6 +243,6 @@ def _product(product_id: str, title: str, price: int) -> Product:
         description=title,
         rating=4.6,
         sales=1000,
-        stock=10,
+        stock=stock,
         image_url="",
     )

@@ -3,6 +3,7 @@ package com.example.commerceagent.data.repository
 import com.example.commerceagent.data.api.CartApi
 import com.example.commerceagent.data.mock.MockCartStore
 import com.example.commerceagent.data.model.Cart
+import com.example.commerceagent.data.model.CheckoutResult
 
 class CartRepository(
     private val api: CartApi = CartApi()
@@ -18,4 +19,7 @@ class CartRepository(
 
     suspend fun removeItem(position: Int): Cart = runCatching { api.removeItem(position) }
         .getOrElse { MockCartStore.removeItem(position) }
+
+    suspend fun checkout(): CheckoutResult = runCatching { api.checkout() }
+        .getOrElse { MockCartStore.checkout() }
 }

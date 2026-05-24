@@ -3,22 +3,53 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.tables import CartItem, Product, utc_now
+from app.models.tables import CartItem, Order, Product, utc_now
+
+
+class CartServiceError(Exception):
+    pass
+
+
+class EmptyCartError(CartServiceError):
+    pass
+
+
+class ProductNotFoundError(CartServiceError):
+    def __init__(self, product_id: str):
+        super().__init__(f"Product not found: {product_id}")
+        self.product_id = product_id
+
+
+class InsufficientStockError(CartServiceError):
+    def __init__(self, product_id: str, requested: int, available: int):
+        super().__init__(f"Insufficient stock for {product_id}: requested {requested}, available {available}")
+        self.product_id = product_id
+        self.requested = requested
+        self.available = available
 
 
 def add_cart_item(db: Session, *, product_id: str, quantity: int = 1, user_id: str = "debug-user") -> CartItem:
     quantity = max(quantity, 1)
+    product = db.get(Product, product_id)
+    if not product:
+        raise ProductNotFoundError(product_id)
     existing = db.scalar(
         select(CartItem)
         .where(CartItem.user_id == user_id)
         .where(CartItem.product_id == product_id)
     )
     if existing:
+        requested = existing.quantity + quantity
+        if requested > product.stock:
+            raise InsufficientStockError(product_id, requested, product.stock)
         existing.quantity += quantity
         existing.updated_at = utc_now()
         db.commit()
         db.refresh(existing)
         return existing
+
+    if quantity > product.stock:
+        raise InsufficientStockError(product_id, quantity, product.stock)
 
     item = CartItem(
         id=f"cart_{uuid.uuid4().hex[:12]}",
@@ -82,6 +113,11 @@ def update_cart_item_quantity_by_position(
     item = get_cart_item_by_position(db, position=position, user_id=user_id)
     if not item:
         return None
+    product = db.get(Product, item.product_id)
+    if not product:
+        raise ProductNotFoundError(item.product_id)
+    if quantity > product.stock:
+        raise InsufficientStockError(item.product_id, quantity, product.stock)
     item.quantity = max(quantity, 1)
     item.updated_at = utc_now()
     db.commit()
@@ -99,3 +135,68 @@ def remove_cart_item_by_position(db: Session, *, position: int, user_id: str = "
         db.delete(persisted)
         db.commit()
     return item
+
+
+def checkout_cart(db: Session, *, user_id: str = "debug-user") -> dict:
+    rows = list(
+        db.execute(
+            select(CartItem, Product)
+            .join(Product, Product.id == CartItem.product_id)
+            .where(CartItem.user_id == user_id)
+            .order_by(CartItem.created_at.asc())
+        ).all()
+    )
+    if not rows:
+        raise EmptyCartError("Cart is empty")
+
+    checkout_items = []
+    for item, product in rows:
+        if item.quantity > product.stock:
+            raise InsufficientStockError(product.id, item.quantity, product.stock)
+        checkout_items.append(_cart_item_payload(item, product))
+
+    order_ids = []
+    total = sum(row["subtotal"] for row in checkout_items)
+    for item, product in rows:
+        product.stock -= item.quantity
+        order = Order(
+            id=f"ord_{uuid.uuid4().hex[:12]}",
+            user_id=user_id,
+            product_id=product.id,
+            status="已下单",
+            logistics_status="订单已提交，等待仓库出库。",
+            return_status="未申请退货",
+        )
+        db.add(order)
+        order_ids.append(order.id)
+        db.delete(item)
+    db.commit()
+
+    refreshed_items = []
+    for payload in checkout_items:
+        product = db.get(Product, payload["product"]["id"])
+        refreshed = dict(payload)
+        refreshed["product"] = {**payload["product"], "stock": product.stock if product else 0}
+        refreshed_items.append(refreshed)
+
+    return {
+        "order_ids": order_ids,
+        "items": refreshed_items,
+        "total": total,
+        "cart": {"items": [], "total": 0},
+    }
+
+
+def _cart_item_payload(item: CartItem, product: Product) -> dict:
+    return {
+        "id": item.id,
+        "quantity": item.quantity,
+        "product": {
+            "id": product.id,
+            "title": product.title,
+            "price": product.price,
+            "stock": product.stock,
+            "image_url": product.image_url,
+        },
+        "subtotal": product.price * item.quantity,
+    }

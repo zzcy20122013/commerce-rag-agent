@@ -5,6 +5,13 @@ data class Cart(
     val total: Int = 0
 )
 
+data class CheckoutResult(
+    val orderIds: List<String> = emptyList(),
+    val items: List<CartItem> = emptyList(),
+    val total: Int = 0,
+    val cart: Cart = Cart()
+)
+
 data class CartItem(
     val id: String,
     val quantity: Int,

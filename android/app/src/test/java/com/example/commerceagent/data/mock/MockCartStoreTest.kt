@@ -16,4 +16,17 @@ class MockCartStoreTest {
         assertEquals(2, cart.items[0].quantity)
         assertEquals(269 * 2, cart.total)
     }
+
+    @Test
+    fun checkoutReturnsOrderIdsAndClearsCart() {
+        MockCartStore.clear()
+        MockCartStore.addItem("mock_shoe_commute", quantity = 2)
+
+        val result = MockCartStore.checkout()
+
+        assertEquals(listOf("mock_ord_1"), result.orderIds)
+        assertEquals(269 * 2, result.total)
+        assertEquals(emptyList(), result.cart.items)
+        assertEquals(emptyList(), MockCartStore.getCart().items)
+    }
 }

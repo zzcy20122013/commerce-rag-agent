@@ -3,6 +3,7 @@ package com.example.commerceagent.data.mock
 import com.example.commerceagent.data.model.Cart
 import com.example.commerceagent.data.model.CartItem
 import com.example.commerceagent.data.model.CartProduct
+import com.example.commerceagent.data.model.CheckoutResult
 
 object MockCartStore {
     private val quantities = linkedMapOf<String, Int>()
@@ -28,6 +29,19 @@ object MockCartStore {
         val productId = quantities.keys.elementAtOrNull(position - 1)
         if (productId != null) quantities.remove(productId)
         return buildCart()
+    }
+
+    fun checkout(): CheckoutResult {
+        val checkedOutItems = buildCart().items
+        val total = checkedOutItems.sumOf { it.subtotal }
+        val orderIds = checkedOutItems.mapIndexed { index, _ -> "mock_ord_${index + 1}" }
+        quantities.clear()
+        return CheckoutResult(
+            orderIds = orderIds,
+            items = checkedOutItems,
+            total = total,
+            cart = buildCart()
+        )
     }
 
     private fun buildCart(): Cart {
