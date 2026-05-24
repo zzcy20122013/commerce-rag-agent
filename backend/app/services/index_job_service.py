@@ -60,11 +60,17 @@ def rebuild_knowledge_docs_index(db: Session, *, chroma_path: str | None = None)
     for document in documents:
         metadata = safe_json(document.metadata_json)
         text = metadata.get("text") or metadata.get("content") or document_to_text(document, metadata)
+        chunk_metadata = {
+            key: value
+            for key, value in metadata.items()
+            if key != "text" and isinstance(value, str | int | float | bool)
+        }
         chunks.append(
             {
                 "id": f"rebuild_{document.id}_0",
                 "text": text,
                 "metadata": {
+                    **chunk_metadata,
                     "document_id": document.id,
                     "source_file": document.source_file,
                     "doc_type": document.doc_type,

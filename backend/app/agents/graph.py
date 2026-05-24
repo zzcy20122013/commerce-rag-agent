@@ -67,7 +67,7 @@ def create_agent_graph(db: Session, *, chroma_path: str | None = None):
     graph.add_node("intent_router", router_node)
     graph.add_node("decision_guide", decision_guide_node(db))
     graph.add_node("shopping_guide", shopping_guide_node(db))
-    graph.add_node("product_knowledge", product_knowledge_node(db))
+    graph.add_node("product_knowledge", product_knowledge_node(db, chroma_path=chroma_path))
     graph.add_node("compare", compare_node(db))
     graph.add_node("order", order_node(db))
     graph.add_node("purchase_help", purchase_help_node(db))

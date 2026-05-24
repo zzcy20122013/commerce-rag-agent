@@ -40,11 +40,17 @@ def import_json_product_dataset(
     db.commit()
 
     imported = 0
+    knowledge_docs_count = 0
     errors: list[dict[str, Any]] = []
     for index, json_file in enumerate(json_files, start=1):
         try:
             payload = json.loads(json_file.read_text(encoding="utf-8"))
-            upsert_dataset_product(db, payload, dataset_root=root, asset_dir=Path(asset_dir) if asset_dir else None)
+            knowledge_docs_count += upsert_dataset_product(
+                db,
+                payload,
+                dataset_root=root,
+                asset_dir=Path(asset_dir) if asset_dir else None,
+            )
             imported += 1
         except Exception as error:
             errors.append({"row": index, "source_file": str(json_file), "error": str(error)})
@@ -60,6 +66,7 @@ def import_json_product_dataset(
         "source_file": str(root),
         "total_rows": len(json_files),
         "imported_count": imported,
+        "knowledge_docs_count": knowledge_docs_count,
         "failed_count": len(errors),
         "errors": errors,
     }
@@ -71,7 +78,7 @@ def upsert_dataset_product(
     *,
     dataset_root: Path,
     asset_dir: Path | None,
-) -> None:
+) -> int:
     product_id = required_text(payload, "product_id")
     category = required_text(payload, "category")
     sub_category = str(payload.get("sub_category") or "").strip()
@@ -85,13 +92,12 @@ def upsert_dataset_product(
         image_root=dataset_root,
         asset_dir=asset_dir,
     )
-    specs = {
-        "sub_category": sub_category,
-        "sku_count": len(skus),
-        "price_range": price_range(skus, base_price),
-        "faq_count": len(knowledge.get("official_faq") or []),
-        "review_count": len(reviews),
-    }
+    specs = build_product_specs(
+        sub_category=sub_category,
+        skus=skus,
+        base_price=base_price,
+        knowledge=knowledge,
+    )
     db.merge(
         Product(
             id=product_id,
@@ -119,8 +125,9 @@ def upsert_dataset_product(
     replace_skus(db, product_id, skus, image["image_url"])
     replace_attributes(db, product_id, category, sub_category, payload)
     replace_tags(db, product_id, category, sub_category, payload, knowledge)
-    replace_documents(db, product_id, category, payload, knowledge)
+    document_count = replace_documents(db, product_id, category, payload, knowledge)
     db.commit()
+    return document_count
 
 
 def replace_skus(db: Session, product_id: str, skus: list[dict[str, Any]], image_url: str) -> None:
@@ -180,11 +187,15 @@ def replace_documents(
     category: str,
     payload: dict[str, Any],
     knowledge: dict[str, Any],
-) -> None:
+) -> int:
     db.execute(delete(Document).where(Document.source_file.like(f"{product_id}:%")))
     chunks = build_knowledge_chunks(payload, knowledge)
-    for index, text in enumerate(chunks):
-        document_id = f"doc_{product_id}_{index}"
+    for index, chunk in enumerate(chunks):
+        document_id = f"doc_{product_id}_{chunk['metadata']['chunk_type']}_{index}"
+        metadata = {
+            **chunk["metadata"],
+            "text": chunk["text"],
+        }
         db.add(
             Document(
                 id=document_id,
@@ -192,31 +203,125 @@ def replace_documents(
                 doc_type="product_knowledge",
                 category=category,
                 version="dataset_v1",
-                metadata_json=json.dumps({"product_id": product_id, "text": text}, ensure_ascii=False),
+                metadata_json=json.dumps(metadata, ensure_ascii=False),
             )
         )
+    return len(chunks)
 
 
-def build_knowledge_chunks(payload: dict[str, Any], knowledge: dict[str, Any]) -> list[str]:
+def build_knowledge_chunks(payload: dict[str, Any], knowledge: dict[str, Any]) -> list[dict[str, Any]]:
     product_id = str(payload.get("product_id") or "")
     title = str(payload.get("title") or "")
-    chunks: list[str] = []
+    base_metadata = {
+        "product_id": product_id,
+        "title": title,
+        "brand": str(payload.get("brand") or ""),
+        "category": str(payload.get("category") or ""),
+        "sub_category": str(payload.get("sub_category") or ""),
+    }
+    chunks: list[dict[str, Any]] = []
     description = str(knowledge.get("marketing_description") or "").strip()
     if description:
-        chunks.append(f"{title}\n商品ID：{product_id}\n营销说明：{description}")
-    for faq in knowledge.get("official_faq") or []:
+        chunks.append(
+            {
+                "text": f"{title}\n商品ID：{product_id}\n营销说明：{description}",
+                "metadata": {**base_metadata, "chunk_type": "marketing_description"},
+            }
+        )
+    for faq_index, faq in enumerate(knowledge.get("official_faq") or []):
         question = str(faq.get("question") or "").strip()
         answer = str(faq.get("answer") or "").strip()
         if question or answer:
-            chunks.append(f"{title}\n商品ID：{product_id}\nFAQ：{question}\n回答：{answer}")
-    reviews = knowledge.get("user_reviews") or []
-    if reviews:
-        review_lines = [
-            f"{item.get('nickname', '用户')}（{item.get('rating', 0)}星）：{item.get('content', '')}"
-            for item in reviews
-        ]
-        chunks.append(f"{title}\n商品ID：{product_id}\n用户评价：\n" + "\n".join(review_lines))
+            chunks.append(
+                {
+                    "text": f"{title}\n商品ID：{product_id}\nFAQ：{question}\n回答：{answer}",
+                    "metadata": {
+                        **base_metadata,
+                        "chunk_type": "official_faq",
+                        "question": question,
+                        "faq_index": faq_index,
+                    },
+                }
+            )
+    for review_index, item in enumerate(knowledge.get("user_reviews") or []):
+        nickname = str(item.get("nickname") or "用户").strip()
+        rating = int(item.get("rating") or 0)
+        content = str(item.get("content") or "").strip()
+        if content:
+            chunks.append(
+                {
+                    "text": f"{title}\n商品ID：{product_id}\n用户评价：{nickname}（{rating}星）：{content}",
+                    "metadata": {
+                        **base_metadata,
+                        "chunk_type": "user_review",
+                        "nickname": nickname,
+                        "rating": rating,
+                        "review_index": review_index,
+                    },
+                }
+            )
     return chunks
+
+
+def build_product_specs(
+    *,
+    sub_category: str,
+    skus: list[dict[str, Any]],
+    base_price: int,
+    knowledge: dict[str, Any],
+) -> dict[str, Any]:
+    reviews = knowledge.get("user_reviews") or []
+    return {
+        "sub_category": sub_category,
+        "sku_count": len(skus),
+        "sku_options": sku_options(skus),
+        "price_range": price_range(skus, base_price),
+        "faq_count": len(knowledge.get("official_faq") or []),
+        "review_count": len(reviews),
+        "review_summary": review_summary(reviews),
+    }
+
+
+def sku_options(skus: list[dict[str, Any]]) -> list[str]:
+    options = []
+    for sku in skus:
+        properties = sku.get("properties") or {}
+        option = " ".join(str(value).strip() for value in properties.values() if str(value).strip())
+        if option:
+            options.append(option)
+    return list(dict.fromkeys(options))
+
+
+def review_summary(reviews: list[dict[str, Any]]) -> dict[str, Any]:
+    negative_reviews = [review for review in reviews if int(review.get("rating") or 0) <= 2]
+    return {
+        "negative_review_count": len(negative_reviews),
+        "negative_keywords": extract_negative_review_keywords(negative_reviews),
+    }
+
+
+def extract_negative_review_keywords(reviews: list[dict[str, Any]]) -> list[str]:
+    candidates = [
+        "敏感肌",
+        "刺痛",
+        "泛红",
+        "闷痘",
+        "闭口",
+        "拔干",
+        "太干",
+        "不适合",
+        "浪费",
+        "失望",
+        "不好喝",
+        "磨脚",
+        "累脚",
+        "压耳",
+        "卡顿",
+        "发热",
+        "续航差",
+    ]
+    text = "\n".join(str(review.get("content") or "") for review in reviews)
+    return [keyword for keyword in candidates if keyword in text]
 
 
 def required_text(payload: dict[str, Any], key: str) -> str:

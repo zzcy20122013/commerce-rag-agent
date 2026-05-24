@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddShoppingCart
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -32,6 +33,23 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.commerceagent.data.api.ApiConfig
 import com.example.commerceagent.data.model.ProductCard
+
+data class ProductReasonUi(
+    val highlights: List<String>,
+    val risk: String?
+)
+
+fun buildProductReasonUi(reasons: List<String>): ProductReasonUi {
+    val cleaned = reasons
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+    val risk = cleaned.firstOrNull { it.startsWith("差评提醒") || it.contains("风险") }
+    val highlights = cleaned
+        .filter { it != risk }
+        .take(4)
+    return ProductReasonUi(highlights = highlights, risk = risk)
+}
 
 @Composable
 fun ProductCardRow(
@@ -68,6 +86,7 @@ private fun ProductRecommendationCard(
     onOpenProduct: (String) -> Unit,
     onAddToCart: (String) -> Unit
 ) {
+    val reasonUi = buildProductReasonUi(card.reasons)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -124,15 +143,41 @@ private fun ProductRecommendationCard(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
                     )
                 }
-                if (card.reasons.isNotEmpty()) {
+                if (reasonUi.highlights.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = card.reasons.take(3).joinToString(" · "),
+                        text = reasonUi.highlights.joinToString(" · "),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.secondary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+                if (!reasonUi.risk.isNullOrBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WarningAmber,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = reasonUi.risk,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
                 FilledTonalButton(

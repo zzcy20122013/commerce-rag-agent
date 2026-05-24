@@ -3,10 +3,11 @@ import json
 from sqlalchemy.orm import Session
 
 from app.agents.shopping_guide import product_to_card
+from app.retrieval.document_index import DocumentIndex
 from app.services.product_service import find_products_by_query, get_product_knowledge_docs, get_product_tags, get_products_by_ids
 
 
-def product_knowledge_node(db: Session):
+def product_knowledge_node(db: Session, *, chroma_path: str | None = None):
     def node(state: dict) -> dict:
         query = state["query"]
         memory_product_ids = state.get("memory", {}).get("last_product_ids", [])[:3]
@@ -27,7 +28,15 @@ def product_knowledge_node(db: Session):
         product = products[0]
         specs = _safe_json(product.specs_json)
         tags = get_product_tags(db, product.id)
-        docs = get_product_knowledge_docs(db, product.id, limit=4)
+        docs = search_vector_product_knowledge(
+            query,
+            product_ids=[item.id for item in products[:3]],
+            chroma_path=chroma_path,
+            limit=4,
+        )
+        retrieval_mode = "vector_knowledge_docs" if docs else "sql_product_documents"
+        if not docs:
+            docs = get_product_knowledge_docs(db, product.id, limit=4)
         answer = build_product_knowledge_answer(product, specs, tags, docs, query=query)
         cards = [product_to_card(item, state.get("memory", {}), rank) for rank, item in enumerate(products, start=1)]
         memory = {**state.get("memory", {}), "last_product_ids": [product.id for product in products]}
@@ -55,11 +64,46 @@ def product_knowledge_node(db: Session):
                     "product_id": product.id,
                     "sources": ["products", "product_tags", "documents"],
                     "doc_hits": [doc["id"] for doc in docs],
+                    "retrieval_mode": retrieval_mode,
                 }
             ],
         }
 
     return node
+
+
+def search_vector_product_knowledge(
+    query: str,
+    *,
+    product_ids: list[str],
+    chroma_path: str | None = None,
+    limit: int = 4,
+) -> list[dict]:
+    if not product_ids:
+        return []
+    allowed_ids = set(product_ids)
+    try:
+        hits = DocumentIndex(chroma_path=chroma_path).search(query, limit=max(limit * 3, 8))
+    except Exception:
+        return []
+    docs = []
+    for hit in hits:
+        metadata = hit.get("metadata") or {}
+        if metadata.get("doc_type") != "product_knowledge" and metadata.get("product_id") not in allowed_ids:
+            continue
+        if metadata.get("product_id") not in allowed_ids:
+            continue
+        docs.append(
+            {
+                "id": hit.get("id", ""),
+                "source_file": metadata.get("source_file", ""),
+                "text": hit.get("text", ""),
+                "metadata": metadata,
+            }
+        )
+        if len(docs) >= limit:
+            break
+    return docs
 
 
 def build_product_knowledge_answer(product, specs: dict, tags: list, docs: list[dict], *, query: str) -> str:

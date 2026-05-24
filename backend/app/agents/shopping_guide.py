@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy.orm import Session
 
 from app.agents.intent_router import extract_shopping_constraints
@@ -313,6 +315,9 @@ def product_to_card(product: Product, memory: dict, rank: int) -> dict:
         reasons.append(f"评分较高：{product.rating:.1f}")
     if product.sales >= 1000:
         reasons.append(f"销量较高：{product.sales}")
+    risk_text = format_review_risk_reason(product)
+    if risk_text:
+        reasons.append(risk_text)
     if memory.get("subcategory") and not any("适合" in reason or "命中偏好" in reason for reason in reasons):
         reasons.append(f"品类匹配：{memory['subcategory']}")
     if not reasons:
@@ -397,6 +402,15 @@ def _product_explain_text(product: Product) -> str:
             product.specs_json or "",
         ]
     ).lower()
+
+
+def format_review_risk_reason(product: Product) -> str:
+    summary = _safe_product_specs(product).get("review_summary") or {}
+    count = int(summary.get("negative_review_count") or 0)
+    keywords = [str(keyword) for keyword in summary.get("negative_keywords") or [] if str(keyword).strip()]
+    if count <= 0 or not keywords:
+        return ""
+    return f"差评提醒：{('/'.join(keywords[:2]))}反馈"
 
 
 def build_no_more_options_answer(memory: dict) -> str:
@@ -525,9 +539,38 @@ def _score_product(product: Product, memory: dict, query: str) -> float:
     if memory.get("budget_max") and product.price <= memory["budget_max"]:
         score += 2
 
+    score -= _review_risk_penalty(product, memory, query)
+
     score += product.rating * 0.2
     score += min(product.sales, 20000) / 20000
     return score
+
+
+def _review_risk_penalty(product: Product, memory: dict, query: str) -> float:
+    summary = _safe_product_specs(product).get("review_summary") or {}
+    count = int(summary.get("negative_review_count") or 0)
+    keywords = [str(keyword).lower() for keyword in summary.get("negative_keywords") or [] if str(keyword).strip()]
+    if count <= 0 or not keywords:
+        return 0.0
+    context = " ".join(
+        [
+            query,
+            " ".join(memory.get("preferences", [])),
+            " ".join(memory.get("use_cases", [])),
+        ]
+    ).lower()
+    matched = [keyword for keyword in keywords if keyword and keyword in context]
+    if not matched:
+        return 0.0
+    return 14.0 + min(count, 5)
+
+
+def _safe_product_specs(product: Product) -> dict:
+    try:
+        parsed = json.loads(product.specs_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _query_keywords(query: str) -> list[str]:
