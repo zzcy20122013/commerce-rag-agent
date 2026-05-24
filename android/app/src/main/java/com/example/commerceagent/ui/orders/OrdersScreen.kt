@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Refresh
@@ -94,7 +95,8 @@ fun OrdersScreen(
                     onCancel = { viewModel.cancel(order.id) },
                     onShip = { viewModel.ship(order.id) },
                     onComplete = { viewModel.complete(order.id) },
-                    onRefund = { viewModel.refund(order.id) }
+                    onRefund = { viewModel.refund(order.id) },
+                    onDelete = { viewModel.delete(order.id) }
                 )
             }
         }
@@ -125,8 +127,29 @@ private fun OrderCard(
     onCancel: () -> Unit,
     onShip: () -> Unit,
     onComplete: () -> Unit,
-    onRefund: () -> Unit
+    onRefund: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除订单记录") },
+            text = { Text("这会从订单历史中删除该记录，后端数据库也会同步删除。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    }
+                ) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            }
+        )
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -158,8 +181,25 @@ private fun OrderCard(
             }
             Spacer(Modifier.height(12.dp))
             OrderActions(order.status, onPay, onCancel, onShip, onComplete, onRefund)
+            if (canDeleteOrderRecord(order.status)) {
+                Spacer(Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("删除记录")
+                }
+            }
         }
     }
+}
+
+private fun canDeleteOrderRecord(status: String): Boolean {
+    return status in setOf("已取消", "已退款", "已完成")
 }
 
 @Composable

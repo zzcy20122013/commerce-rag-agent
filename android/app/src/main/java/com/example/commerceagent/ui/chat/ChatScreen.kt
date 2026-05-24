@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,6 +57,7 @@ fun ChatScreen(
     sessionId: String?,
     onOpenProduct: (String) -> Unit,
     onOpenOrders: () -> Unit,
+    onOpenCheckout: () -> Unit,
     onMenuClick: () -> Unit,
     onSessionChanged: (String) -> Unit,
     newChatSignal: Int,
@@ -226,7 +228,10 @@ fun ChatScreen(
             onDecrease = { position, quantity -> viewModel.updateCartQuantity(position, quantity - 1) },
             onIncrease = { position, quantity -> viewModel.updateCartQuantity(position, quantity + 1) },
             onRemove = viewModel::removeCartItem,
-            onCheckout = viewModel::checkoutCart
+            onCheckout = {
+                showCartSheet = false
+                onOpenCheckout()
+            }
         )
     }
 }
@@ -290,8 +295,10 @@ private fun CartBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.78f)
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -325,8 +332,11 @@ private fun CartBottomSheet(
                     )
                 }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items.forEachIndexed { index, item ->
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    itemsIndexed(items) { index, item ->
                         CartItemRow(
                             item = item,
                             position = index + 1,
@@ -361,7 +371,7 @@ private fun CartBottomSheet(
                 ) {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("提交订单并同步库存")
+                    Text("去结算")
                 }
             }
         }

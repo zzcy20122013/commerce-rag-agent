@@ -51,6 +51,10 @@ object MockOrderStore {
         return replace(updated.copy(returnStatus = "退款已完成。原因：${reason.ifBlank { "用户申请售后" }}。"))
     }
 
+    fun delete(orderId: String): Boolean {
+        return orders.removeAll { it.id == orderId }
+    }
+
     private fun update(orderId: String, status: String, logisticsStatus: String): Order {
         val order = orders.firstOrNull { it.id == orderId } ?: orders.first()
         return replace(order.copy(status = status, logisticsStatus = logisticsStatus))

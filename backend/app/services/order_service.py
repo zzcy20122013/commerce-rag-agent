@@ -148,6 +148,17 @@ def refund_order(db: Session, order_id: str, *, reason: str = "", user_id: str =
     return serialize_order(db, order)
 
 
+def delete_order_record(db: Session, order_id: str, *, user_id: str = "debug-user") -> dict:
+    order = _require_order(db, order_id, user_id=user_id)
+    if order.status == "待支付":
+        _restore_stock_for_order(db, order)
+    for item in db.scalars(select(OrderItem).where(OrderItem.order_id == order.id)).all():
+        db.delete(item)
+    db.delete(order)
+    db.commit()
+    return {"ok": True, "deleted_order_id": order_id}
+
+
 def serialize_order(db: Session, order: Order) -> dict:
     items = _order_items(db, order)
     total = sum(item["subtotal"] for item in items)

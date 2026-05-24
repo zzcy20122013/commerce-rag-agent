@@ -13,7 +13,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class ChatSseClient(
+open class ChatSseClient(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
@@ -21,7 +21,7 @@ class ChatSseClient(
         .callTimeout(240, TimeUnit.SECONDS)
         .build()
 ) {
-    fun streamChat(
+    open fun streamChat(
         message: String,
         sessionId: String?,
         uploadId: String?
@@ -77,7 +77,7 @@ class ChatSseClient(
                 SseEvent.ProductCards(List(array.length()) { index -> array.getJSONObject(index).toProductCard() })
             }
             "trace" -> SseEvent.Trace(data)
-            "error" -> SseEvent.Error(data)
+            "error" -> SseEvent.Error(parseSseErrorMessage(data))
             "done" -> SseEvent.Done
             else -> null
         }
@@ -91,4 +91,13 @@ class ChatSseClient(
             listOf(code, message).filter { it.isNotBlank() }.joinToString("：")
         }.getOrDefault("").ifBlank { "请求失败：$statusCode" }
     }
+}
+
+fun parseSseErrorMessage(data: String): String {
+    return runCatching {
+        val json = JSONObject(data)
+        val message = json.optString("message")
+        val code = json.optString("code")
+        message.ifBlank { code }
+    }.getOrDefault("").ifBlank { data.ifBlank { "网络异常，请稍后重试" } }
 }

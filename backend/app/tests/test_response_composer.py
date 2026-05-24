@@ -1,5 +1,7 @@
 from app.agents.response_composer import compose_agent_response, stream_response_composer_chunks
+from app.llm.generation import _format_llm_error
 from app.llm.prompt_registry import build_response_composer_messages
+import httpx
 
 
 class FakeChatClient:
@@ -144,3 +146,13 @@ def test_response_composer_stream_falls_back_when_streaming_fails() -> None:
     assert completed["answer"] == "我会先看第一款。"
     assert completed["llm_enabled"] is False
     assert "stream timeout" in completed["llm_error"]
+
+
+def test_llm_error_format_does_not_read_unconsumed_stream_response() -> None:
+    request = httpx.Request("POST", "https://example.test/chat/completions")
+    response = httpx.Response(500, request=request, stream=httpx.ByteStream(b'{"error":"bad"}'))
+    error = httpx.HTTPStatusError("server error", request=request, response=response)
+
+    formatted = _format_llm_error(error)
+
+    assert formatted == "http_500: <stream response body not read>"

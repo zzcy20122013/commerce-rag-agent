@@ -9,10 +9,11 @@ from app.api.cart import router as cart_router
 from app.api.orders import get_db as orders_get_db
 from app.api.orders import router as orders_router
 from app.models.db import Base
-from app.models.tables import Product
+from app.models.tables import Order, OrderItem, Product
 from app.services.cart_service import add_cart_item, checkout_cart
 from app.services.order_service import (
     complete_order,
+    delete_order_record,
     get_order_detail,
     list_orders,
     pay_order,
@@ -98,6 +99,30 @@ def test_orders_api_lists_and_updates_order_status(monkeypatch) -> None:
     refunded = client.post(f"/api/orders/{order_id}/refund", json={"reason": "不想要了"}).json()
     assert refunded["status"] == "已退款"
     assert "不想要了" in refunded["return_status"]
+
+    deleted = client.delete(f"/api/orders/{order_id}").json()
+    assert deleted == {"ok": True, "deleted_order_id": order_id}
+    assert client.get("/api/orders").json()["orders"] == []
+
+
+def test_delete_waiting_payment_order_releases_stock_and_removes_items() -> None:
+    db = _new_db()
+    try:
+        db.add(_product("p_pants_001", "通勤直筒长裤", 199, stock=2))
+        db.commit()
+        add_cart_item(db, product_id="p_pants_001", quantity=2)
+        order_id = checkout_cart(db)["order_ids"][0]
+        assert db.get(Product, "p_pants_001").stock == 0
+
+        result = delete_order_record(db, order_id)
+
+        assert result == {"ok": True, "deleted_order_id": order_id}
+        assert db.get(Product, "p_pants_001").stock == 2
+        assert db.get(Order, order_id) is None
+        assert db.query(OrderItem).all() == []
+        assert list_orders(db) == []
+    finally:
+        db.close()
 
 
 def _new_db() -> Session:

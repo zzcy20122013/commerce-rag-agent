@@ -14,18 +14,18 @@ class ChatRepository(
 ) {
     fun streamChat(message: String, sessionId: String?, uploadId: String?): Flow<SseEvent> {
         return flow {
-            var receivedUsefulEvent = false
+            var completed = false
             client.streamChat(message, sessionId, uploadId)
                 .catch {
                     emitMockStream(message, sessionId, uploadId)
-                    receivedUsefulEvent = true
+                    completed = true
                 }
                 .collect { event ->
-                    if (event is SseEvent.Error && !receivedUsefulEvent) {
+                    if (event is SseEvent.Error && !completed) {
                         emitMockStream(message, sessionId, uploadId)
-                        receivedUsefulEvent = true
+                        completed = true
                     } else {
-                        if (event !is SseEvent.Trace) receivedUsefulEvent = true
+                        if (event is SseEvent.Done) completed = true
                         emit(event)
                     }
                 }

@@ -173,6 +173,9 @@ def _has_provider_key() -> bool:
 
 def _format_llm_error(error: Exception) -> str:
     if isinstance(error, httpx.HTTPStatusError):
-        body = error.response.text.replace("\n", " ")[:500]
+        try:
+            body = error.response.text.replace("\n", " ")[:500]
+        except httpx.ResponseNotRead:
+            body = "<stream response body not read>"
         return f"http_{error.response.status_code}: {body}"
     return f"{type(error).__name__}: {str(error)[:500]}"

@@ -24,4 +24,7 @@ class OrderRepository(
 
     suspend fun refund(orderId: String, reason: String): Order = runCatching { api.refund(orderId, reason) }
         .getOrElse { MockOrderStore.refund(orderId, reason) }
+
+    suspend fun delete(orderId: String): Boolean = runCatching { api.delete(orderId) }
+        .getOrElse { MockOrderStore.delete(orderId) }
 }

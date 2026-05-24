@@ -8,6 +8,7 @@ from app.services.order_service import (
     OrderStateError,
     cancel_order,
     complete_order,
+    delete_order_record,
     get_order_detail,
     list_orders,
     pay_order,
@@ -66,6 +67,12 @@ def complete(order_id: str, db: Session = Depends(get_db)) -> dict:
 def refund(order_id: str, payload: RefundRequest, db: Session = Depends(get_db)) -> dict:
     init_db()
     return _run_order_action(lambda: refund_order(db, order_id, reason=payload.reason))
+
+
+@router.delete("/{order_id}")
+def delete_order(order_id: str, db: Session = Depends(get_db)) -> dict:
+    init_db()
+    return _run_order_action(lambda: delete_order_record(db, order_id))
 
 
 def _run_order_action(action):

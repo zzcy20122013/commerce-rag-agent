@@ -32,6 +32,7 @@ fun MainScreen(
     initialSessionId: String? = null,
     onOpenProduct: (String) -> Unit,
     onOpenOrders: () -> Unit,
+    onOpenCheckout: () -> Unit,
     onLogout: () -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -187,6 +188,7 @@ fun MainScreen(
             sessionId = currentSessionId,
             onOpenProduct = onOpenProduct,
             onOpenOrders = onOpenOrders,
+            onOpenCheckout = onOpenCheckout,
             onMenuClick = {
                 sessionViewModel.refresh()
                 scope.launch { drawerState.open() }

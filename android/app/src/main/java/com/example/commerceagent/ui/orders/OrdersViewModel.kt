@@ -45,6 +45,24 @@ class OrdersViewModel(
 
     fun refund(orderId: String) = runAction("退款已完成") { repository.refund(orderId, "项目路演模拟售后") }
 
+    fun delete(orderId: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = true)
+            runCatching { repository.delete(orderId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        orders = _state.value.orders.filterNot { it.id == orderId },
+                        isLoading = false,
+                        error = null,
+                        notice = "订单记录已删除"
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(isLoading = false, error = error.message)
+                }
+        }
+    }
+
     fun consumeNotice() {
         _state.value = _state.value.copy(notice = null)
     }

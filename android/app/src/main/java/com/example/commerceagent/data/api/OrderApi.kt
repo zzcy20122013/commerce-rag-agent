@@ -46,6 +46,17 @@ class OrderApi(
         }
     }
 
+    suspend fun delete(orderId: String): Boolean = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("${ApiConfig.BASE_URL}/api/orders/$orderId")
+            .delete()
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("删除订单失败：${response.code}")
+            JSONObject(response.body?.string().orEmpty()).optBoolean("ok", true)
+        }
+    }
+
     private suspend fun postAction(orderId: String, action: String): Order = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("${ApiConfig.BASE_URL}/api/orders/$orderId/$action")
