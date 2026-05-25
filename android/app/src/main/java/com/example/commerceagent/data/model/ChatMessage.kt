@@ -4,6 +4,7 @@ data class ChatMessage(
     val id: String,
     val role: MessageRole,
     val content: String,
+    val imageUrl: String? = null,
     val productCards: List<ProductCard> = emptyList(),
     val isStreaming: Boolean = false,
     val feedbackEnabled: Boolean = false,

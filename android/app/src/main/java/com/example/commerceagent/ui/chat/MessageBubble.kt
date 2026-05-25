@@ -13,11 +13,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.commerceagent.data.api.ApiConfig
 import com.example.commerceagent.data.model.ChatMessage
 import com.example.commerceagent.data.model.MessageRole
 import com.example.commerceagent.ui.components.FeedbackBar
@@ -78,6 +81,17 @@ fun MessageBubble(
                         }
                     ) {
                         Column(Modifier.padding(horizontal = if (isUser) 16.dp else 0.dp, vertical = 10.dp)) {
+                            if (!message.imageUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = ApiConfig.resolveUrl(message.imageUrl),
+                                    contentDescription = "用户上传图片",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .widthIn(max = 180.dp)
+                                        .height(120.dp)
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
                             if (message.isStreaming) {
                                 MessageText(
                                     text = message.content.ifBlank { "正在思考..." },

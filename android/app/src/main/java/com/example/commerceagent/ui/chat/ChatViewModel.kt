@@ -211,10 +211,11 @@ class ChatViewModel(
     private fun sendText(text: String) {
         if (text.isBlank() || state.value.isSending) return
         val assistantTempId = "assistant_${UUID.randomUUID().toString().take(8)}"
+        val imageUrl = state.value.previewUrl
         _state.value = state.value.copy(
             input = "",
             isSending = true,
-            messages = state.value.messages + ChatMessage(id = UUID.randomUUID().toString(), role = MessageRole.User, content = text) +
+            messages = state.value.messages + buildUserMessage(text = text, imageUrl = imageUrl) +
                 ChatMessage(id = assistantTempId, role = MessageRole.Assistant, content = "", isStreaming = true),
             error = null
         )
@@ -298,6 +299,15 @@ fun mergeVoiceTranscript(currentInput: String, transcript: String): String {
     if (cleanTranscript.isBlank()) return currentInput
     val cleanInput = currentInput.trim()
     return if (cleanInput.isBlank()) cleanTranscript else "$cleanInput $cleanTranscript"
+}
+
+fun buildUserMessage(text: String, imageUrl: String? = null): ChatMessage {
+    return ChatMessage(
+        id = UUID.randomUUID().toString(),
+        role = MessageRole.User,
+        content = text,
+        imageUrl = imageUrl
+    )
 }
 
 fun buildFailedAssistantMessage(messageId: String, prompt: String, errorMessage: String): ChatMessage {
