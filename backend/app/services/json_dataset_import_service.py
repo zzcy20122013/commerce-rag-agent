@@ -212,6 +212,8 @@ def replace_documents(
 def build_knowledge_chunks(payload: dict[str, Any], knowledge: dict[str, Any]) -> list[dict[str, Any]]:
     product_id = str(payload.get("product_id") or "")
     title = str(payload.get("title") or "")
+    skus = payload.get("skus") or []
+    reviews = knowledge.get("user_reviews") or []
     base_metadata = {
         "product_id": product_id,
         "title": title,
@@ -220,14 +222,34 @@ def build_knowledge_chunks(payload: dict[str, Any], knowledge: dict[str, Any]) -
         "sub_category": str(payload.get("sub_category") or ""),
     }
     chunks: list[dict[str, Any]] = []
+    profile_parts = [
+        f"{title}",
+        f"商品ID：{product_id}",
+        f"品牌：{base_metadata['brand']}",
+        f"品类：{base_metadata['category']} / {base_metadata['sub_category']}",
+    ]
+    options = sku_options(skus)
+    if options:
+        profile_parts.append(f"规格选项：{'、'.join(options[:8])}")
+    chunks.append(
+        {
+            "text": "\n".join(part for part in profile_parts if part),
+            "metadata": {**base_metadata, "chunk_type": "product_profile", "sku_count": len(skus)},
+        }
+    )
     description = str(knowledge.get("marketing_description") or "").strip()
     if description:
-        chunks.append(
-            {
-                "text": f"{title}\n商品ID：{product_id}\n营销说明：{description}",
-                "metadata": {**base_metadata, "chunk_type": "marketing_description"},
-            }
-        )
+        for section_index, section in enumerate(split_text_sections(description)):
+            chunks.append(
+                {
+                    "text": f"{title}\n商品ID：{product_id}\n营销说明：{section}",
+                    "metadata": {
+                        **base_metadata,
+                        "chunk_type": "marketing_description",
+                        "section_index": section_index,
+                    },
+                }
+            )
     for faq_index, faq in enumerate(knowledge.get("official_faq") or []):
         question = str(faq.get("question") or "").strip()
         answer = str(faq.get("answer") or "").strip()
@@ -243,19 +265,44 @@ def build_knowledge_chunks(payload: dict[str, Any], knowledge: dict[str, Any]) -
                     },
                 }
             )
-    for review_index, item in enumerate(knowledge.get("user_reviews") or []):
+    if reviews:
+        summary = review_summary(reviews)
+        risk_text = "、".join(summary["risk_tags"]) if summary["risk_tags"] else "暂无明显集中差评风险"
+        chunks.append(
+            {
+                "text": (
+                    f"{title}\n商品ID：{product_id}\n评论摘要："
+                    f"好评 {summary['positive_review_count']} 条，中评 {summary['neutral_review_count']} 条，"
+                    f"差评 {summary['negative_review_count']} 条。"
+                    f"正向关键词：{'、'.join(summary['positive_keywords']) or '暂无'}。"
+                    f"风险提醒：{risk_text}。"
+                ),
+                "metadata": {
+                    **base_metadata,
+                    "chunk_type": "review_summary",
+                    "positive_review_count": summary["positive_review_count"],
+                    "neutral_review_count": summary["neutral_review_count"],
+                    "negative_review_count": summary["negative_review_count"],
+                    "risk_tags": "、".join(summary["risk_tags"]),
+                },
+            }
+        )
+    for review_index, item in enumerate(reviews):
         nickname = str(item.get("nickname") or "用户").strip()
         rating = int(item.get("rating") or 0)
         content = str(item.get("content") or "").strip()
         if content:
+            sentiment = review_sentiment(rating)
             chunks.append(
                 {
-                    "text": f"{title}\n商品ID：{product_id}\n用户评价：{nickname}（{rating}星）：{content}",
+                    "text": f"{title}\n商品ID：{product_id}\n用户评价（{sentiment}）：{nickname}（{rating}星）：{content}",
                     "metadata": {
                         **base_metadata,
                         "chunk_type": "user_review",
                         "nickname": nickname,
                         "rating": rating,
+                        "sentiment": sentiment,
+                        "risk_keywords": "、".join(extract_negative_review_keywords([item])) if rating <= 2 else "",
                         "review_index": review_index,
                     },
                 }
@@ -294,9 +341,17 @@ def sku_options(skus: list[dict[str, Any]]) -> list[str]:
 
 def review_summary(reviews: list[dict[str, Any]]) -> dict[str, Any]:
     negative_reviews = [review for review in reviews if int(review.get("rating") or 0) <= 2]
+    neutral_reviews = [review for review in reviews if int(review.get("rating") or 0) == 3]
+    positive_reviews = [review for review in reviews if int(review.get("rating") or 0) >= 4]
+    negative_keywords = extract_negative_review_keywords(negative_reviews)
     return {
+        "positive_review_count": len(positive_reviews),
+        "neutral_review_count": len(neutral_reviews),
         "negative_review_count": len(negative_reviews),
-        "negative_keywords": extract_negative_review_keywords(negative_reviews),
+        "positive_keywords": extract_positive_review_keywords(positive_reviews),
+        "negative_keywords": negative_keywords,
+        "risk_tags": negative_keywords[:5],
+        "representative_negative_reviews": review_snippets(negative_reviews, limit=2),
     }
 
 
@@ -322,6 +377,72 @@ def extract_negative_review_keywords(reviews: list[dict[str, Any]]) -> list[str]
     ]
     text = "\n".join(str(review.get("content") or "") for review in reviews)
     return [keyword for keyword in candidates if keyword in text]
+
+
+def extract_positive_review_keywords(reviews: list[dict[str, Any]]) -> list[str]:
+    candidates = [
+        "温和",
+        "保湿",
+        "修护",
+        "熬夜",
+        "舒服",
+        "轻薄",
+        "便携",
+        "续航",
+        "降噪",
+        "通勤",
+        "好喝",
+        "不磨脚",
+        "性价比",
+    ]
+    text = "\n".join(str(review.get("content") or "") for review in reviews)
+    return [keyword for keyword in candidates if keyword in text]
+
+
+def review_snippets(reviews: list[dict[str, Any]], *, limit: int) -> list[str]:
+    snippets = []
+    for review in reviews:
+        content = str(review.get("content") or "").strip()
+        if content:
+            snippets.append(content[:80])
+    return snippets[:limit]
+
+
+def review_sentiment(rating: int) -> str:
+    if rating <= 2:
+        return "negative"
+    if rating == 3:
+        return "neutral"
+    return "positive"
+
+
+def split_text_sections(text: str, *, max_length: int = 220) -> list[str]:
+    cleaned = " ".join(text.split())
+    if len(cleaned) <= max_length:
+        return [cleaned]
+    sections: list[str] = []
+    current = ""
+    for sentence in re_split_sentences(cleaned):
+        if current and len(current) + len(sentence) > max_length:
+            sections.append(current)
+            current = sentence
+        else:
+            current = f"{current}{sentence}" if current else sentence
+    if current:
+        sections.append(current)
+    return sections or [cleaned[:max_length]]
+
+
+def re_split_sentences(text: str) -> list[str]:
+    sentences: list[str] = []
+    start = 0
+    for index, char in enumerate(text):
+        if char in "。！？!?；;":
+            sentences.append(text[start : index + 1])
+            start = index + 1
+    if start < len(text):
+        sentences.append(text[start:])
+    return [sentence.strip() for sentence in sentences if sentence.strip()]
 
 
 def required_text(payload: dict[str, Any], key: str) -> str:

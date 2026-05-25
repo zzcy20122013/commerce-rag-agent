@@ -535,7 +535,7 @@ def build_card_evidence(product: Product, memory: dict, reasons: list[str]) -> l
 
 def build_source_summary(product: Product, reasons: list[str]) -> str:
     sources = ["价格/销量/评分"]
-    if any("差评提醒" in reason for reason in reasons):
+    if any("评价提醒" in reason for reason in reasons):
         sources.append("用户评价")
     if product.specs_json and product.specs_json != "{}":
         sources.append("商品规格")
@@ -571,10 +571,17 @@ def _product_explain_text(product: Product) -> str:
 def format_review_risk_reason(product: Product) -> str:
     summary = _safe_product_specs(product).get("review_summary") or {}
     count = int(summary.get("negative_review_count") or 0)
-    keywords = [str(keyword) for keyword in summary.get("negative_keywords") or [] if str(keyword).strip()]
+    keywords = [
+        str(keyword)
+        for keyword in (summary.get("risk_tags") or summary.get("negative_keywords") or [])
+        if str(keyword).strip()
+    ]
     if count <= 0 or not keywords:
         return ""
-    return f"差评提醒：{('/'.join(keywords[:2]))}反馈"
+    keyword_text = "、".join(keywords[:3])
+    snippets = [str(item).strip() for item in summary.get("representative_negative_reviews") or [] if str(item).strip()]
+    snippet_text = f"，例如“{snippets[0][:36]}”" if snippets else ""
+    return f"评价提醒：有 {count} 条评价提到 {keyword_text}{snippet_text}"
 
 
 def build_no_more_options_answer(memory: dict) -> str:

@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any
 
@@ -148,11 +149,42 @@ class TextIndex:
 
 
 def product_to_text(product: Product) -> str:
-    return (
-        f"{product.title}\n"
-        f"品类：{product.category}\n"
-        f"品牌：{product.brand}\n"
-        f"价格：{product.price}\n"
-        f"描述：{product.description}\n"
-        f"参数：{product.specs_json}"
-    )
+    specs = _safe_json(product.specs_json)
+    parts = [
+        product.title,
+        f"品类：{product.category}",
+        f"品牌：{product.brand}",
+        f"价格：{product.price}",
+        f"描述：{product.description}",
+    ]
+    sku_options = specs.get("sku_options") or []
+    if sku_options:
+        parts.append(f"规格选项：{'、'.join(str(option) for option in sku_options[:8])}")
+    price_range = specs.get("price_range") or {}
+    if price_range:
+        parts.append(f"价格范围：{price_range.get('min')} 到 {price_range.get('max')} 元")
+    review_summary = specs.get("review_summary") or {}
+    if review_summary:
+        parts.append(
+            "评论摘要："
+            f"好评 {review_summary.get('positive_review_count', 0)} 条，"
+            f"中评 {review_summary.get('neutral_review_count', 0)} 条，"
+            f"差评 {review_summary.get('negative_review_count', 0)} 条"
+        )
+        risk_tags = review_summary.get("risk_tags") or review_summary.get("negative_keywords") or []
+        if risk_tags:
+            parts.append(f"评论风险：{'、'.join(str(tag) for tag in risk_tags[:5])}")
+        positive_keywords = review_summary.get("positive_keywords") or []
+        if positive_keywords:
+            parts.append(f"正向评价关键词：{'、'.join(str(keyword) for keyword in positive_keywords[:5])}")
+    if specs.get("faq_count") is not None:
+        parts.append(f"FAQ数量：{specs.get('faq_count')}")
+    return "\n".join(part for part in parts if part)
+
+
+def _safe_json(value: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(value or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}

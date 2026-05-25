@@ -136,7 +136,10 @@ def classify_intent(text: str) -> IntentResult:
 
     if constraints.product_ids or (
         _contains_any(normalized, PRODUCT_KNOWLEDGE_KEYWORDS)
-        and not _contains_any(normalized, ["推荐", "帮我选", "预算", "以内", "以下", "recommend", "budget"])
+        and not _contains_any(
+            normalized,
+            ["推荐", "帮我选", "预算", "以内", "以下", "想买", "找一款", "找个", "买一", "recommend", "budget"],
+        )
     ):
         return IntentResult(intent="product_knowledge", confidence=0.84, constraints=constraints)
 

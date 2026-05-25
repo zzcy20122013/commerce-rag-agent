@@ -32,17 +32,23 @@ def test_build_knowledge_chunks_splits_marketing_faq_and_reviews_with_metadata()
     chunks = build_knowledge_chunks(payload, knowledge)
 
     assert [chunk["metadata"]["chunk_type"] for chunk in chunks] == [
+        "product_profile",
         "marketing_description",
         "official_faq",
         "official_faq",
+        "review_summary",
         "user_review",
         "user_review",
     ]
     assert all(chunk["metadata"]["product_id"] == "p_beauty_001" for chunk in chunks)
     assert chunks[0]["metadata"]["brand"] == "测试品牌"
-    assert chunks[1]["metadata"]["question"] == "敏感肌能用吗？"
-    assert chunks[3]["metadata"]["rating"] == 1
-    assert "敏感肌用了刺痛" in chunks[3]["text"]
+    assert chunks[0]["metadata"]["sub_category"] == "精华"
+    assert chunks[2]["metadata"]["question"] == "敏感肌能用吗？"
+    assert chunks[4]["metadata"]["negative_review_count"] == 1
+    assert "敏感肌" in chunks[4]["text"]
+    assert chunks[5]["metadata"]["rating"] == 1
+    assert chunks[5]["metadata"]["sentiment"] == "negative"
+    assert "敏感肌用了刺痛" in chunks[5]["text"]
 
 
 def test_rebuild_knowledge_docs_index_preserves_product_chunk_metadata(monkeypatch) -> None:
@@ -108,6 +114,9 @@ def test_product_specs_include_sku_options_and_review_risk_summary() -> None:
     assert specs["price_range"] == {"min": 720, "max": 980}
     assert specs["review_summary"]["negative_review_count"] == 1
     assert "敏感肌" in specs["review_summary"]["negative_keywords"]
+    assert specs["review_summary"]["positive_review_count"] == 1
+    assert "熬夜" in specs["review_summary"]["positive_keywords"]
+    assert specs["review_summary"]["risk_tags"] == ["敏感肌", "刺痛", "泛红"]
 
     product = Product(
         id="p_beauty_001",
@@ -125,6 +134,8 @@ def test_product_specs_include_sku_options_and_review_risk_summary() -> None:
     text = product_to_text(product)
     assert "50ml 加大装" in text
     assert "敏感肌" in text
+    assert "评论风险" in text
+    assert "参数：{" not in text
 
 
 def test_review_risk_can_lower_sensitive_skin_recommendation_rank() -> None:
@@ -172,7 +183,7 @@ def test_product_card_contains_explainable_evidence_sources() -> None:
         brand="测试品牌",
         price=219,
         description="温和保湿，适合敏感肌",
-        specs_json='{"review_summary":{"negative_review_count":1,"negative_keywords":["刺痛"]}}',
+        specs_json='{"sku_options":["30ml"],"review_summary":{"negative_review_count":1,"negative_keywords":["刺痛"],"risk_tags":["刺痛"],"representative_negative_reviews":["上脸有刺痛感"]}}',
         rating=4.6,
         sales=1200,
         stock=8,
@@ -187,6 +198,30 @@ def test_product_card_contains_explainable_evidence_sources() -> None:
 
     evidence = card["evidence"]
     assert any(item["source"] == "价格/销量/评分" for item in evidence)
-    assert any(item["source"] == "用户评价" for item in evidence)
+    review_evidence = next(item for item in evidence if item["source"] == "用户评价")
+    assert "1 条评价" in review_evidence["detail"]
+    assert "刺痛" in review_evidence["detail"]
     assert card["source_summary"] == "推荐依据：价格/销量/评分、用户评价、商品规格"
     assert "商品库结构化字段" not in card["source_summary"]
+
+
+def test_review_risk_reason_is_user_friendly_and_contextual() -> None:
+    product = Product(
+        id="p_beauty_002",
+        title="强功效精华",
+        category="美妆护肤",
+        brand="测试品牌",
+        price=299,
+        description="高浓度修护",
+        specs_json='{"review_summary":{"negative_review_count":2,"negative_keywords":["敏感肌","刺痛"],"risk_tags":["敏感肌","刺痛"],"representative_negative_reviews":["敏感肌上脸刺痛"]}}',
+        rating=4.2,
+        sales=900,
+        stock=8,
+        image_url="",
+    )
+
+    card = product_to_card(product, {"preferences": ["敏感肌友好"]}, rank=1)
+
+    risk_reason = next(reason for reason in card["reasons"] if reason.startswith("评价提醒"))
+    assert "2 条评价" in risk_reason
+    assert "敏感肌、刺痛" in risk_reason
