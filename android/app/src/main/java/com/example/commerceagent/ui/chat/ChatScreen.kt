@@ -12,6 +12,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -48,8 +50,10 @@ import java.util.Locale
 
 private val quickPrompts = listOf(
     "推荐 3500 以内学生记笔记平板",
-    "推荐 300 以内通勤鞋",
-    "找 100 元以内控油粉饼"
+    "找 100 元以内方便早餐",
+    "找 100 元以内速溶咖啡",
+    "推荐 300 元以内控油防晒",
+    "推荐 200 元以内速干运动上衣"
 )
 
 @Composable
@@ -496,22 +500,55 @@ private fun WelcomePanel(onPrompt: (String) -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp)
         )
-        Spacer(Modifier.height(48.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            quickPrompts.forEach { prompt ->
-                Surface(
-                    onClick = { onPrompt(prompt) },
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFFEEEEEE)),
-                    color = Color.White
-                ) {
-                    Text(
-                        prompt,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+        Spacer(Modifier.height(44.dp))
+        QuickPromptChips(onPrompt = onPrompt)
+    }
+}
+
+@Composable
+private fun QuickPromptChips(onPrompt: (String) -> Unit) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(horizontal = 30.dp)
+    ) {
+        items(quickPrompts.chunked(2)) { columnPrompts ->
+            Column(
+                modifier = Modifier.width(228.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                columnPrompts.forEach { prompt ->
+                    QuickPromptChip(prompt = prompt, onClick = { onPrompt(prompt) })
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun QuickPromptChip(prompt: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, Color(0xFFE8E6EF)),
+        color = Color.White
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                prompt,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
