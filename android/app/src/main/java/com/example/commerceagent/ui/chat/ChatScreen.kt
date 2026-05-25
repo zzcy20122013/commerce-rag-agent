@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -42,6 +43,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.example.commerceagent.data.api.ApiConfig
 import com.example.commerceagent.data.model.CartItem
@@ -80,6 +82,14 @@ fun ChatScreen(
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) viewModel.uploadImage(context.contentResolver, uri)
     }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val capturedUri = pendingCameraUri
+        pendingCameraUri = null
+        if (success && capturedUri != null) {
+            viewModel.uploadImage(context.contentResolver, capturedUri)
+        }
+    }
     val voiceLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val transcript = result.data
@@ -88,6 +98,23 @@ fun ChatScreen(
                 .orEmpty()
             if (transcript.isNotBlank()) {
                 viewModel.applyVoiceTranscript(transcript)
+            }
+        }
+    }
+    fun launchCameraCapture() {
+        val imageFile = createCameraImageFile(context.cacheDir)
+        val imageUri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            imageFile
+        )
+        pendingCameraUri = imageUri
+        try {
+            cameraLauncher.launch(imageUri)
+        } catch (_: ActivityNotFoundException) {
+            pendingCameraUri = null
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("当前设备没有可用的相机应用")
             }
         }
     }
@@ -174,6 +201,7 @@ fun ChatScreen(
                 isSending = state.isSending,
                 onInput = viewModel::updateInput,
                 onPickImage = { imagePicker.launch("image/*") },
+                onTakePhoto = { launchCameraCapture() },
                 onVoiceInput = {
                     val permission = Manifest.permission.RECORD_AUDIO
                     if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
@@ -565,6 +593,7 @@ private fun ChatInputBar(
     isSending: Boolean,
     onInput: (String) -> Unit,
     onPickImage: () -> Unit,
+    onTakePhoto: () -> Unit,
     onVoiceInput: () -> Unit,
     onSend: () -> Unit
 ) {
@@ -600,6 +629,12 @@ private fun ChatInputBar(
                         modifier = Modifier.padding(bottom = 4.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "上传图片", tint = Color(0xFF5B35EA))
+                    }
+                    IconButton(
+                        onClick = onTakePhoto,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    ) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = "拍照找货", tint = Color(0xFF5B35EA))
                     }
 
                     TextField(
