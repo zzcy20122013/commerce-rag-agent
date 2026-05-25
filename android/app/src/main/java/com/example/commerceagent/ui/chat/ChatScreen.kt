@@ -9,6 +9,11 @@ import android.net.Uri
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -200,8 +205,13 @@ fun ChatScreen(
                 previewUrl = state.previewUrl,
                 isSending = state.isSending,
                 onInput = viewModel::updateInput,
+                onClearImage = viewModel::clearImage,
                 onPickImage = { imagePicker.launch("image/*") },
                 onTakePhoto = { launchCameraCapture() },
+                onOpenCart = {
+                    viewModel.loadCart()
+                    showCartSheet = true
+                },
                 onVoiceInput = {
                     val permission = Manifest.permission.RECORD_AUDIO
                     if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
@@ -592,115 +602,233 @@ private fun ChatInputBar(
     previewUrl: String?,
     isSending: Boolean,
     onInput: (String) -> Unit,
+    onClearImage: () -> Unit,
     onPickImage: () -> Unit,
     onTakePhoto: () -> Unit,
+    onOpenCart: () -> Unit,
     onVoiceInput: () -> Unit,
     onSend: () -> Unit
 ) {
-    Box(
+    var showTools by remember { mutableStateOf(false) }
+    val canSend = isChatSendEnabled(input, previewUrl)
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            color = Color(0xFFF2F2F7),
-            border = BorderStroke(1.dp, Color(0xFFE5E5EA))
-        ) {
-            Column {
-                if (previewUrl != null) {
-                    Box(Modifier.padding(8.dp)) {
+        if (previewUrl != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White,
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(1.dp, Color(0xFFE7E3F4))
+                ) {
+                    Box(modifier = Modifier.padding(6.dp)) {
                         AsyncImage(
                             model = ApiConfig.resolveUrl(previewUrl),
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
+                            contentDescription = "已添加图片",
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp)),
                             contentScale = ContentScale.Crop
                         )
+                        IconButton(
+                            onClick = onClearImage,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 12.dp, y = (-12).dp)
+                                .size(26.dp),
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = Color(0xFF171A21),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "移除图片",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
-                Row(
-                    verticalAlignment = Alignment.Bottom, // Allows TextField to grow upwards
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            }
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(30.dp),
+            color = Color.White,
+            shadowElevation = 10.dp,
+            border = BorderStroke(1.dp, Color(0xFFE7E3F4))
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                IconButton(
+                    onClick = { showTools = !showTools },
+                    modifier = Modifier.size(44.dp)
                 ) {
-                    IconButton(
-                        onClick = onPickImage,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "上传图片", tint = Color(0xFF5B35EA))
-                    }
-                    IconButton(
-                        onClick = onTakePhoto,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    ) {
-                        Icon(Icons.Default.PhotoCamera, contentDescription = "拍照找货", tint = Color(0xFF5B35EA))
-                    }
-
-                    TextField(
-                        value = input,
-                        onValueChange = onInput,
-                        placeholder = { Text("输入您的问题...") },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(vertical = 4.dp),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            cursorColor = Color(0xFF5B35EA)
-                        ),
-                        maxLines = 6
+                    Icon(
+                        imageVector = if (showTools) Icons.Default.Close else Icons.Default.PhotoCamera,
+                        contentDescription = if (showTools) "收起工具" else "展开拍照工具",
+                        tint = Color(0xFF171A21),
+                        modifier = Modifier.size(28.dp)
                     )
+                }
 
-                    Box(modifier = Modifier.padding(bottom = 4.dp, end = 4.dp)) {
-                        if (isSending) {
-                            IconButton(
-                                onClick = { /* TODO: Implement Stop */ },
-                                colors = IconButtonDefaults.iconButtonColors(
-                                    containerColor = Color(0xFF5B35EA),
-                                    contentColor = Color.White
-                                ),
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                // Using a simple Box as a square stop icon if Icons.Default.Stop is missing
-                                Box(
-                                    modifier = Modifier
-                                        .size(12.dp)
-                                        .background(Color.White, RoundedCornerShape(2.dp))
-                                )
-                            }
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = onVoiceInput,
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Mic,
-                                        contentDescription = "语音输入",
-                                        tint = Color(0xFF5B35EA),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                IconButton(
-                                    onClick = onSend,
-                                    enabled = input.isNotBlank(),
-                                    colors = IconButtonDefaults.iconButtonColors(
-                                        containerColor = if (input.isNotBlank()) Color(0xFF5B35EA) else Color.Transparent,
-                                        contentColor = if (input.isNotBlank()) Color.White else Color.Gray
-                                    ),
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.Send,
-                                        contentDescription = "发送",
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                TextField(
+                    value = input,
+                    onValueChange = onInput,
+                    placeholder = { Text("发消息或按住说话...") },
+                    modifier = Modifier.weight(1f),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = Color(0xFF5B35EA)
+                    ),
+                    maxLines = 5
+                )
+
+                if (isSending) {
+                    IconButton(
+                        onClick = { /* TODO: Implement Stop */ },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = Color(0xFF5B35EA),
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(13.dp)
+                                .background(Color.White, RoundedCornerShape(2.dp))
+                        )
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = onVoiceInput,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Mic,
+                                contentDescription = "语音输入",
+                                tint = Color(0xFF5B35EA),
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
+                        IconButton(
+                            onClick = onSend,
+                            enabled = canSend,
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = if (canSend) Color(0xFF5B35EA) else Color.Transparent,
+                                contentColor = if (canSend) Color.White else Color(0xFFC2C2CC)
+                            ),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "发送",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showTools,
+            enter = fadeIn() + slideInVertically { it / 3 },
+            exit = fadeOut() + slideOutVertically { it / 3 }
+        ) {
+            ChatInputToolPanel(
+                onPickImage = {
+                    showTools = false
+                    onPickImage()
+                },
+                onTakePhoto = {
+                    showTools = false
+                    onTakePhoto()
+                },
+                onOpenCart = {
+                    showTools = false
+                    onOpenCart()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatInputToolPanel(
+    onPickImage: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onOpenCart: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        chatInputToolActions.forEach { action ->
+            val icon = when (action.type) {
+                ChatInputToolType.Camera -> Icons.Default.PhotoCamera
+                ChatInputToolType.Album -> Icons.Default.Image
+                ChatInputToolType.File -> Icons.Default.AttachFile
+                ChatInputToolType.Cart -> Icons.Default.ShoppingCart
+            }
+            val onClick = when (action.type) {
+                ChatInputToolType.Camera -> onTakePhoto
+                ChatInputToolType.Album -> onPickImage
+                ChatInputToolType.File -> ({})
+                ChatInputToolType.Cart -> onOpenCart
+            }
+
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(18.dp),
+                color = if (action.enabled) Color.White else Color(0xFFF4F2F8),
+                border = BorderStroke(1.dp, Color(0xFFEDE9F7)),
+                shadowElevation = if (action.enabled) 4.dp else 0.dp
+            ) {
+                TextButton(
+                    onClick = onClick,
+                    enabled = action.enabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(92.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color(0xFF171A21),
+                        disabledContentColor = Color(0xFF9A98A5)
+                    )
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = action.label,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = action.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }

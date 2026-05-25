@@ -88,6 +88,10 @@ class ChatViewModel(
         _state.value = _state.value.copy(input = value)
     }
 
+    fun clearImage() {
+        _state.value = _state.value.copy(uploadId = null, previewUrl = null)
+    }
+
     fun applyVoiceTranscript(transcript: String) {
         _state.value = _state.value.copy(
             input = mergeVoiceTranscript(_state.value.input, transcript)
@@ -103,7 +107,7 @@ class ChatViewModel(
     }
 
     fun send() {
-        val text = state.value.input.trim()
+        val text = chatPromptForSend(state.value.input, state.value.previewUrl) ?: return
         sendText(text)
     }
 
