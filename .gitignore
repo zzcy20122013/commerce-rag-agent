@@ -38,6 +38,7 @@ outputs/
 *.sqlite3
 *.hprof
 backend/app/data/chroma/
+app/data/chroma/
 backend/app/data/uploads/
 backend/app/data/imports/
 backend/app/data/product_images/
