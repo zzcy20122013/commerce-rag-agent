@@ -15,12 +15,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.commerceagent.data.model.ChatMessage
 import com.example.commerceagent.data.model.MessageRole
 import com.example.commerceagent.ui.components.FeedbackBar
 import com.example.commerceagent.ui.components.LoadingDots
-import com.example.commerceagent.ui.components.StreamingText
 
 @Composable
 fun MessageBubble(
@@ -78,15 +79,17 @@ fun MessageBubble(
                     ) {
                         Column(Modifier.padding(horizontal = if (isUser) 16.dp else 0.dp, vertical = 10.dp)) {
                             if (message.isStreaming) {
-                                StreamingText(
-                                    text = message.content,
+                                MessageText(
+                                    text = message.content.ifBlank { "正在思考..." },
+                                    isUser = isUser,
                                     color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface
                                 )
                                 LoadingDots()
                             } else {
-                                Text(
+                                MessageText(
                                     text = message.content,
-                                    style = MaterialTheme.typography.bodyLarge
+                                    isUser = isUser,
+                                    color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -138,4 +141,49 @@ fun MessageBubble(
             }
         }
     }
+}
+
+@Composable
+private fun MessageText(
+    text: String,
+    isUser: Boolean,
+    color: Color
+) {
+    if (isUser) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp),
+            color = color
+        )
+        return
+    }
+
+    val paragraphs = remember(text) { readableParagraphs(text) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        paragraphs.forEachIndexed { index, paragraph ->
+            Text(
+                text = paragraph,
+                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 29.sp),
+                color = color.copy(alpha = 0.92f),
+                fontWeight = if (index == 0 && paragraphs.size > 1) FontWeight.Medium else FontWeight.Normal
+            )
+        }
+    }
+}
+
+private fun readableParagraphs(text: String): List<String> {
+    val cleaned = text.trim()
+    if (cleaned.isBlank()) return listOf("正在思考...")
+    val existingParagraphs = cleaned
+        .split(Regex("\\n\\s*\\n"))
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+    if (existingParagraphs.size > 1) return existingParagraphs
+
+    val sentences = Regex("(?<=[。！？!?])")
+        .split(cleaned)
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+    if (sentences.size <= 2 || cleaned.length < 88) return listOf(cleaned)
+    return sentences.chunked(2).map { it.joinToString("") }
 }

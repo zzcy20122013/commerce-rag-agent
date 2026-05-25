@@ -157,7 +157,7 @@ fun CheckoutScreen(
                             Text("订单说明", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                "提交后会生成待支付订单并同步锁定库存；支付、物流、收货和售后都在“我的订单”里继续处理。",
+                                "提交后会生成待支付订单；支付、物流、收货和售后都在“我的订单”里继续处理。库存会随订单状态自动更新。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.Gray
                             )

@@ -50,8 +50,37 @@ def test_tablet_difference_answer_uses_catalog_specs_and_docs() -> None:
     assert "144Hz" in answer
     assert "跨屏互联" in answer
     assert "OTG" in answer
-    assert "您可以优先看" in answer
+    assert "可以优先看" in answer
     assert "你主要是在看你这次提到的重点" not in answer
+
+
+def test_compare_answer_uses_user_facing_recommendation_tone() -> None:
+    vivo = _product(
+        "p_digital_019",
+        "vivo Pad 6 Pro 12.1英寸高刷全面屏学习娱乐多任务办公平板电脑",
+        "vivo",
+        3299,
+        4.6,
+        1750,
+        "适合学生记笔记和轻办公。",
+        "{}",
+    )
+    xiaomi = _product(
+        "p_digital_011",
+        "小米平板 8 Pro 12.1英寸高刷大屏影音娱乐学习办公平板电脑",
+        "小米",
+        3299,
+        4.2,
+        1050,
+        "适合影音娱乐和网课。",
+        "{}",
+    )
+
+    answer = build_compare_answer([vivo, xiaomi], query="哪个更适合学生记笔记")
+
+    assert "可以优先看" in answer
+    assert "我会优先" not in answer
+    assert "我会优先选" not in answer
 
 
 def _product(

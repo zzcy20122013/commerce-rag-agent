@@ -59,9 +59,9 @@ def build_compare_answer(products, *, query: str = "", docs_by_product: dict | N
     cheapest = min(products, key=lambda product: product.price)
     winner = best_match or cheapest
     keywords = _query_keywords(query)
-    focus = "、".join(keywords[:3]) if keywords else "你这次提到的重点"
+    focus = "、".join(keywords[:3]) if keywords else "价格、口碑和使用场景"
     lines = [
-        f"你主要是在看{focus}，这几款里我会优先选 {winner.title}。"
+        f"您主要是在看{focus}，这几款里可以优先看 {winner.title}。"
     ]
 
     ordered_products = _ordered_compare_products(products, winner, cheapest)
@@ -205,7 +205,7 @@ def _short_text(text: str, *, limit: int) -> str:
 
 
 def _query_keywords(query: str) -> list[str]:
-    candidates = ["敏感肌", "修护", "维稳", "保湿", "抗初老", "淡纹", "通勤", "跑步", "低脂", "早餐", "学习", "办公"]
+    candidates = ["敏感肌", "修护", "维稳", "保湿", "抗初老", "淡纹", "通勤", "跑步", "低脂", "早餐", "学习", "记笔记", "办公"]
     return [keyword for keyword in candidates if keyword in query]
 
 

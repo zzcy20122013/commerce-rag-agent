@@ -74,12 +74,12 @@ def build_decision_fallback(cards: list[dict], memory: dict) -> str:
             "预算上，普通大学日常一般看 5000-7000 元档；游戏或重度创作通常要再往上加。\n\n"
             "核心参数我建议这样看：内存至少 16GB，想多开软件或长期用尽量 32GB；"
             "硬盘 512GB 起步，资料和项目多就看 1TB；屏幕优先 14-16 英寸、高分辨率，带去上课也别太重。\n\n"
-            f"结合现在商品库，我会先看 {first['title']}，价格约 {first['price']} 元。"
+            f"结合现在可选商品，您可以优先看 {first['title']}，价格约 {first['price']} 元。"
             f"{compare_text}"
             "你再补充一下预算上限、专业方向、会不会打大型游戏，我就能继续帮你缩到一两款。"
         )
     return (
         f"买{subcategory}可以先看用途、预算和长期使用成本。"
-        f"如果要我先给一个方向，我会优先看 {first['title']}，价格约 {first['price']} 元。"
+        f"如果先给一个方向，您可以优先看 {first['title']}，价格约 {first['price']} 元。"
         "你再告诉我预算和主要用途，我可以继续帮你缩到一两款。"
     )

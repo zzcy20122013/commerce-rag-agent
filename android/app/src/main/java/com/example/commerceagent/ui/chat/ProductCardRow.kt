@@ -56,7 +56,9 @@ fun buildProductReasonUi(reasons: List<String>): ProductReasonUi {
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .distinct()
-    val risk = cleaned.firstOrNull { it.startsWith("差评提醒") || it.contains("风险") }
+    val risk = cleaned.firstOrNull {
+        it.startsWith("评价提醒") || it.startsWith("差评提醒") || it.contains("风险")
+    }?.let { formatReasonForUser(it) }
     val highlights = cleaned
         .filter { it != risk }
         .map { formatReasonForUser(it) }
@@ -98,8 +100,10 @@ fun buildProductEvidenceUi(
             .orEmpty()
     }
     val highlight = evidence
-        .map { it.text.trim() }
-        .firstOrNull { it.isNotEmpty() }
+        .firstOrNull { sourceLabelForUser(it.source) == "用户评价" }
+        ?.text
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
     return ProductEvidenceUi(title = title, sources = sources, highlight = highlight)
 }
 
@@ -348,6 +352,12 @@ private fun sourceLabelForUser(source: String): String {
 
 private fun formatReasonForUser(reason: String): String {
     val trimmed = reason.trim()
+    if (trimmed.startsWith("评价提醒：")) {
+        return trimmed
+    }
+    if (trimmed.startsWith("差评提醒：")) {
+        return trimmed.replaceFirst("差评提醒", "评价提醒")
+    }
     parsePricePair(trimmed, "预算内")?.let { (price, _) ->
         return "预算内：${price} 元"
     }
