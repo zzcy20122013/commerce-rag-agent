@@ -36,7 +36,7 @@
 - Android 原生端
 - Docker Compose
 - PostgreSQL 迁移
-- 完整支付/购物车交易闭环
+- 真实支付、真实物流和完整交易闭环
 
 ## 2. 文件结构
 

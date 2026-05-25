@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 构建正式 Android 展示端，实现类似“豆包”的流式聊天体验，支持商品卡片、图片上传、会话历史和点赞/点踩反馈。
+**Goal:** 构建正式 Android 展示端，实现类似“豆包”的流式聊天体验，支持商品卡片、图片上传、会话历史、购物/订单闭环和点赞/点踩反馈。
 
-**Architecture:** Android 使用 Kotlin + Jetpack Compose。网络层使用 OkHttp 连接 FastAPI SSE；状态层使用 ViewModel + Kotlin Flow；图片展示用 Coil；页面由会话列表、聊天页、商品详情页组成。
+**Architecture:** Android 使用 Kotlin + Jetpack Compose。网络层使用 OkHttp 连接 FastAPI SSE 和 REST API；状态层使用 ViewModel + Kotlin Flow；图片展示用 Coil；页面由登录页、聊天页、会话侧边栏、商品详情页、确认订单页和我的订单页组成。
 
 **Tech Stack:** Kotlin, Jetpack Compose, ViewModel, Kotlin Flow, OkHttp, Coil, Navigation Compose, Material 3.
 
@@ -27,7 +27,12 @@
 9. 会话列表、新建会话、重命名会话、历史消息加载。
 10. 真实删除会话，调用 `DELETE /api/sessions/{id}`。
 11. SSE 错误收尾：失败时不再无限显示“正在思考...”，而是显示错误提示。
-12. Android 模拟器访问本机后端：`http://10.0.2.2:8000`。
+12. 商品卡片和商品详情支持加入购物车，顶部购物车角标同步数量。
+13. 购物车支持查看、删除、修改数量，并通过“去结算”进入确认订单页。
+14. 确认订单页支持提交订单，后端扣减库存并生成待支付订单。
+15. 我的订单页支持支付、取消、模拟发货、确认收货、退款售后和订单记录删除。
+16. 系统语音转文字入口已接入，依赖设备可用语音识别服务。
+17. Android 模拟器访问本机后端：`http://10.0.2.2:8000`。
 
 待继续打磨：
 
@@ -35,7 +40,8 @@
 2. 消息滚动、输入框、键盘遮挡、侧边栏交互细节。
 3. 商品卡片在移动端的纵向/横向展示策略。
 4. 图片上传后的多模态结果展示。
-5. 真机测试和不同屏幕尺寸适配。
+5. 语音输入、真流式、确认订单和订单删除的真机/模拟器稳定性验证。
+6. 不同屏幕尺寸适配。
 
 ## 1. 范围
 
@@ -49,12 +55,15 @@
 - 图片上传
 - 点赞/点踩反馈
 - 商品详情页
+- 购物车入口
+- 确认订单页
+- 我的订单页
 
 不包含：
 
 - iOS 客户端
 - 推送通知
-- 支付下单
+- 真实支付网关和真实物流系统
 - 离线缓存复杂同步
 
 ## 2. Android 目录结构
@@ -72,15 +81,21 @@ android/
         ChatSseClient.kt
         UploadApi.kt
         FeedbackApi.kt
+        CartApi.kt
+        OrderApi.kt
       model/
         ChatMessage.kt
         ProductCard.kt
         SseEvent.kt
         Session.kt
+        Cart.kt
+        Order.kt
       repository/
         ChatRepository.kt
         SessionRepository.kt
         FeedbackRepository.kt
+        CartRepository.kt
+        OrderRepository.kt
     ui/
       chat/
         ChatScreen.kt
@@ -93,6 +108,12 @@ android/
         SessionListViewModel.kt
       product/
         ProductDetailScreen.kt
+      checkout/
+        CheckoutScreen.kt
+        CheckoutViewModel.kt
+      orders/
+        OrdersScreen.kt
+        OrdersViewModel.kt
       components/
         StreamingText.kt
         FeedbackBar.kt

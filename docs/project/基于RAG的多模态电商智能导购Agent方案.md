@@ -168,7 +168,7 @@ flowchart TD
 
 ### 5.1 Android 客户端
 
-Android 端是正式展示入口，重点体验是“像豆包一样的流式聊天 + 商品卡片 + 图片上传”。
+Android 端是正式展示入口，重点体验是“像豆包一样的流式聊天 + 商品卡片 + 图片上传 + 轻量购物闭环”。
 
 主要功能：
 
@@ -181,6 +181,10 @@ Android 端是正式展示入口，重点体验是“像豆包一样的流式聊
 7. 商品详情跳转。
 8. 侧边栏新建会话和删除会话。
 9. SSE 异常收尾，避免一直停留在“正在思考”。
+10. 系统语音转文字入口。
+11. 商品卡片/商品详情加入购物车。
+12. 购物车查看、删除、改数量，进入确认订单页。
+13. 确认订单后生成待支付订单，并在我的订单中继续支付、发货、收货、退款售后和删除记录。
 
 关键页面：
 
@@ -189,9 +193,12 @@ Android 端是正式展示入口，重点体验是“像豆包一样的流式聊
 | 会话列表页 | 展示历史会话、创建新会话 |
 | 聊天页 | 文本输入、图片上传、流式回答、商品卡片 |
 | 商品详情页 | 展示商品参数、价格、库存、推荐理由 |
+| 购物车 | 查看已加购商品、删除、修改数量、进入结算 |
+| 确认订单页 | 确认商品、数量和总价，提交订单并触发库存扣减 |
+| 我的订单页 | 查看订单状态，模拟支付、发货、收货、退款售后和删除记录 |
 | 反馈入口 | 对回答、商品推荐结果进行点赞或点踩 |
 
-当前工程状态：Android 原生端已完成第一版，可在 Android Studio 模拟器运行。模拟器访问本机后端使用 `http://10.0.2.2:8000`。
+当前工程状态：Android 原生端已完成第一版，可在 Android Studio 模拟器运行。模拟器访问本机后端使用 `http://10.0.2.2:8000`。语音输入依赖设备可用的系统语音识别服务；支付、发货和售后属于项目内模拟闭环，不接真实支付网关和物流系统。
 
 ### 5.2 React 调试后台
 
@@ -284,11 +291,22 @@ FastAPI 是系统的统一服务入口。
 | `/api/catalog/reindex` | POST | 重建商品文本、知识文档和商品图片向量索引 |
 | `/api/products` | GET | 商品列表和过滤查询 |
 | `/api/products/{id}` | GET | 商品详情 |
-| `/api/orders/{id}` | GET | 查询订单状态 |
+| `/api/cart` | GET | 查看购物车 |
+| `/api/cart/items` | POST | 加入购物车 |
+| `/api/cart/items/{position}` | PUT/DELETE | 修改或删除购物车商品 |
+| `/api/cart/checkout` | POST | 提交购物车订单，校验并扣减库存 |
+| `/api/orders` | GET | 查看订单列表 |
+| `/api/orders/{id}` | GET/DELETE | 查询订单详情或删除订单历史记录 |
+| `/api/orders/{id}/pay` | POST | 模拟支付 |
+| `/api/orders/{id}/cancel` | POST | 取消待支付订单并释放库存 |
+| `/api/orders/{id}/ship` | POST | 模拟发货 |
+| `/api/orders/{id}/complete` | POST | 确认收货 |
+| `/api/orders/{id}/refund` | POST | 模拟退款售后并回补库存 |
 | `/api/sessions` | GET/POST | 会话列表与新建会话 |
 | `/api/sessions/{id}/messages` | GET | 加载历史消息和对应商品卡片 |
 | `/api/sessions/{id}` | DELETE | 删除会话及其消息、推荐日志、检索日志和反馈记录 |
 | `/api/feedback` | POST | 点赞、点踩、反馈原因 |
+| `/api/runtime/stats` | GET | 查看请求、错误和 SSE 连接统计 |
 | `/api/debug/retrieval` | POST | 调试检索链路 |
 
 ### 5.6 LangGraph Agent 编排层
