@@ -16,6 +16,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,7 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ListAlt
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +41,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -675,12 +677,15 @@ private fun ChatInputBar(
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 IconButton(
-                    onClick = { showTools = !showTools },
+                    onClick = {
+                        showTools = false
+                        onTakePhoto()
+                    },
                     modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
-                        imageVector = if (showTools) Icons.Default.Close else Icons.Default.PhotoCamera,
-                        contentDescription = if (showTools) "收起工具" else "展开拍照工具",
+                        imageVector = Icons.Default.PhotoCamera,
+                        contentDescription = "拍照找货",
                         tint = Color(0xFF171A21),
                         modifier = Modifier.size(28.dp)
                     )
@@ -697,6 +702,12 @@ private fun ChatInputBar(
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                         cursorColor = Color(0xFF5B35EA)
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            if (canSend && !isSending) onSend()
+                        }
                     ),
                     maxLines = 5
                 )
@@ -730,18 +741,17 @@ private fun ChatInputBar(
                             )
                         }
                         IconButton(
-                            onClick = onSend,
-                            enabled = canSend,
+                            onClick = { showTools = !showTools },
                             colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = if (canSend) Color(0xFF5B35EA) else Color.Transparent,
-                                contentColor = if (canSend) Color.White else Color(0xFFC2C2CC)
+                                containerColor = Color.Transparent,
+                                contentColor = Color(0xFF5B35EA)
                             ),
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(42.dp)
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "发送",
-                                modifier = Modifier.size(20.dp)
+                                imageVector = if (showTools) Icons.Default.Cancel else Icons.Default.AddCircle,
+                                contentDescription = if (showTools) "收起工具" else "展开工具",
+                                modifier = Modifier.size(30.dp)
                             )
                         }
                     }
@@ -759,10 +769,6 @@ private fun ChatInputBar(
                     showTools = false
                     onPickImage()
                 },
-                onTakePhoto = {
-                    showTools = false
-                    onTakePhoto()
-                },
                 onOpenCart = {
                     showTools = false
                     onOpenCart()
@@ -775,7 +781,6 @@ private fun ChatInputBar(
 @Composable
 private fun ChatInputToolPanel(
     onPickImage: () -> Unit,
-    onTakePhoto: () -> Unit,
     onOpenCart: () -> Unit
 ) {
     Row(
@@ -784,13 +789,11 @@ private fun ChatInputToolPanel(
     ) {
         chatInputToolActions.forEach { action ->
             val icon = when (action.type) {
-                ChatInputToolType.Camera -> Icons.Default.PhotoCamera
                 ChatInputToolType.Album -> Icons.Default.Image
                 ChatInputToolType.File -> Icons.Default.AttachFile
                 ChatInputToolType.Cart -> Icons.Default.ShoppingCart
             }
             val onClick = when (action.type) {
-                ChatInputToolType.Camera -> onTakePhoto
                 ChatInputToolType.Album -> onPickImage
                 ChatInputToolType.File -> ({})
                 ChatInputToolType.Cart -> onOpenCart

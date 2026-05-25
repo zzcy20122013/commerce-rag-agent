@@ -1,7 +1,6 @@
 package com.example.commerceagent.ui.chat
 
 enum class ChatInputToolType {
-    Camera,
     Album,
     File,
     Cart
@@ -14,7 +13,6 @@ data class ChatInputToolAction(
 )
 
 val chatInputToolActions = listOf(
-    ChatInputToolAction(ChatInputToolType.Camera, "相机"),
     ChatInputToolAction(ChatInputToolType.Album, "相册"),
     ChatInputToolAction(ChatInputToolType.File, "文件", enabled = false),
     ChatInputToolAction(ChatInputToolType.Cart, "购物车")

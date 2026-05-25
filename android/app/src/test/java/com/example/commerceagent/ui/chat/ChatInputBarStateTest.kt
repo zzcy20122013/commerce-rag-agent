@@ -9,7 +9,7 @@ class ChatInputBarStateTest {
     @Test
     fun toolPanelUsesCommerceActions() {
         assertEquals(
-            listOf("相机", "相册", "文件", "购物车"),
+            listOf("相册", "文件", "购物车"),
             chatInputToolActions.map { it.label }
         )
     }
