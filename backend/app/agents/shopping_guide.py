@@ -24,6 +24,21 @@ MEMORY_FIELDS = [
     "exclusions",
 ]
 
+DOMESTIC_BRANDS = {
+    "安踏",
+    "李宁",
+    "特步",
+    "鸿星尔克",
+    "华为",
+    "小米",
+    "荣耀",
+    "vivo",
+    "oppo",
+    "联想",
+    "青云",
+    "星河",
+}
+
 
 def shopping_guide_node(db: Session):
     def node(state: dict) -> dict:
@@ -112,7 +127,9 @@ def shopping_guide_node(db: Session):
                 budget_max=None,
             )
         products, retrieval_trace = hybrid_retrieve_and_rerank(db, products, memory, query)
-        cards = [product_to_card(product, memory, rank) for rank, product in enumerate(products[:3], start=1)]
+        visible_limit = 2 if no_exact_match else 3
+        visible_products = products[:visible_limit]
+        cards = [product_to_card(product, memory, rank) for rank, product in enumerate(visible_products, start=1)]
         fallback_answer = build_recommendation_answer(cards, memory, no_exact_match=no_exact_match)
         generation_memory = build_generation_memory(memory, cards, no_exact_match=no_exact_match)
         generation = generate_shopping_result(
@@ -136,7 +153,7 @@ def shopping_guide_node(db: Session):
         return {
             **state,
             "constraints": effective_constraints,
-            "memory": {**memory, "last_product_ids": [product.id for product in products[:3]]},
+            "memory": {**memory, "last_product_ids": [product.id for product in visible_products]},
             "retrieved_items": [{"product_id": product.id, "title": product.title} for product in products[:5]],
             "product_cards": cards,
             "no_exact_match": no_exact_match,
@@ -165,6 +182,8 @@ def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
         _append_preference(memory, "轻便")
     if any(word in lowered for word in ["便宜", "省钱", "划算", "cheaper"]):
         _append_preference(memory, "性价比")
+    if any(word in lowered for word in ["国产", "国货", "国内品牌", "国产品牌"]):
+        _append_preference(memory, "国产品牌")
     if any(word in lowered for word in ["敏感肌", "易敏肌", "温和", "无刺激"]):
         _append_preference(memory, "敏感肌友好")
     if any(word in lowered for word in ["修护", "维稳", "屏障"]):
@@ -364,6 +383,8 @@ def product_to_card(product: Product, memory: dict, rank: int) -> dict:
     for preference in memory.get("preferences", []):
         if preference.lower() in product_text:
             reasons.append(f"命中偏好：{preference}")
+    if "国产品牌" in memory.get("preferences", []) and _is_domestic_brand(product.brand):
+        reasons.append("国产品牌")
     if product.rating >= 4.5:
         reasons.append(f"评分较高：{product.rating:.1f}")
     if product.sales >= 1000:
@@ -454,31 +475,31 @@ def format_card_reasons(card: dict, *, limit: int = 3) -> str:
 def build_card_evidence(product: Product, memory: dict, reasons: list[str]) -> list[dict]:
     evidence = [
         {
-            "source": "商品库结构化字段",
+            "source": "价格/销量/评分",
             "detail": f"价格 {product.price} 元，评分 {product.rating:.1f}，销量 {product.sales}，库存 {product.stock}",
         }
     ]
     if any(reason.startswith("预算") or reason.startswith("超预算") for reason in reasons):
-        evidence.append({"source": "用户约束匹配", "detail": f"预算约束：{memory.get('budget_max')} 元以内"})
+        evidence.append({"source": "你的预算条件", "detail": f"预算约束：{memory.get('budget_max')} 元以内"})
     matched_preferences = [
         preference
         for preference in memory.get("preferences", [])
         if str(preference).lower() in _product_explain_text(product)
     ]
     if matched_preferences:
-        evidence.append({"source": "商品标题/描述/规格", "detail": f"命中偏好：{'、'.join(matched_preferences[:3])}"})
+        evidence.append({"source": "商品描述/规格", "detail": f"命中偏好：{'、'.join(matched_preferences[:3])}"})
     risk = format_review_risk_reason(product)
     if risk:
-        evidence.append({"source": "用户评价摘要", "detail": risk})
+        evidence.append({"source": "用户评价", "detail": risk})
     return evidence
 
 
 def build_source_summary(product: Product, reasons: list[str]) -> str:
-    sources = ["商品库结构化字段"]
+    sources = ["价格/销量/评分"]
     if any("差评提醒" in reason for reason in reasons):
-        sources.append("用户评价摘要")
+        sources.append("用户评价")
     if product.specs_json and product.specs_json != "{}":
-        sources.append("商品规格/知识字段")
+        sources.append("商品规格")
     return f"推荐依据：{'、'.join(dict.fromkeys(sources))}"
 
 
@@ -547,7 +568,7 @@ def _asks_for_broad_category(query: str) -> bool:
 
 def _asks_for_more_options(query: str) -> bool:
     lowered = query.lower()
-    return any(keyword in lowered for keyword in ["还有", "其他", "别的", "换一批", "换个", "再推荐", "再找"])
+    return any(keyword in lowered for keyword in ["还有", "其他", "别的", "有没有", "换一批", "换个", "再推荐", "再找"])
 
 
 def _append_preference(memory: dict, value: str) -> None:
@@ -623,6 +644,7 @@ COLOR_PREFERENCE_ALIASES = {
 
 
 def _score_product(product: Product, memory: dict, query: str) -> float:
+    preferences = set(memory.get("preferences", []))
     text = " ".join(
         [
             product.title,
@@ -650,6 +672,8 @@ def _score_product(product: Product, memory: dict, query: str) -> float:
         normalized = preference.lower()
         if normalized in text:
             score += 6
+    if "国产品牌" in preferences and _is_domestic_brand(product.brand):
+        score += 10
 
     if memory.get("budget_max") and product.price <= memory["budget_max"]:
         score += 2
@@ -691,3 +715,8 @@ def _safe_product_specs(product: Product) -> dict:
 def _query_keywords(query: str) -> list[str]:
     lowered = query.lower()
     return [keyword for keyword in DOMAIN_KEYWORDS if keyword in lowered]
+
+
+def _is_domestic_brand(brand: str) -> bool:
+    lowered = (brand or "").lower()
+    return any(item.lower() in lowered for item in DOMESTIC_BRANDS)

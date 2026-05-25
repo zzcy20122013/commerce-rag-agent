@@ -59,8 +59,21 @@ fun buildProductReasonUi(reasons: List<String>): ProductReasonUi {
     val risk = cleaned.firstOrNull { it.startsWith("差评提醒") || it.contains("风险") }
     val highlights = cleaned
         .filter { it != risk }
+        .map { formatReasonForUser(it) }
         .take(4)
     return ProductReasonUi(highlights = highlights, risk = risk)
+}
+
+fun buildProductBadge(index: Int, reasons: List<String>): String {
+    val overBudget = reasons.any { it.trim().startsWith("超预算") }
+    if (overBudget) {
+        return if (index == 0) "预算外备选" else "预算外"
+    }
+    return when (index) {
+        0 -> "主推"
+        1 -> "备选"
+        else -> "再看看"
+    }
 }
 
 fun buildProductEvidenceUi(
@@ -69,14 +82,15 @@ fun buildProductEvidenceUi(
     reasons: List<String> = emptyList()
 ): ProductEvidenceUi {
     val sources = evidence
-        .map { it.source.trim() }
+        .map { sourceLabelForUser(it.source) }
         .filter { it.isNotEmpty() }
         .distinct()
         .take(3)
-    val title = sourceSummary.trim().ifBlank {
+    val title = formatSourceSummaryForUser(sourceSummary).ifBlank {
         reasons
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith("差评提醒") && !it.contains("风险") }
+            .map { formatReasonForUser(it).substringBefore("：") }
             .distinct()
             .take(2)
             .joinToString("、", prefix = "推荐依据：")
@@ -103,11 +117,7 @@ fun ProductCardRow(
         cards.take(3).forEachIndexed { index, card ->
             ProductRecommendationCard(
                 card = card,
-                badge = when (index) {
-                    0 -> "主推"
-                    1 -> "备选"
-                    else -> "再看看"
-                },
+                badge = buildProductBadge(index, card.reasons),
                 quantityInCart = cartQuantities[card.productId] ?: 0,
                 onOpenProduct = onOpenProduct,
                 onAddToCart = onAddToCart
@@ -310,4 +320,46 @@ private fun ProductCardImage(card: ProductCard) {
 
 private fun ProductEvidence.toUiItem(): ProductEvidenceUiItem {
     return ProductEvidenceUiItem(source = source, text = text)
+}
+
+private fun formatSourceSummaryForUser(summary: String): String {
+    val cleaned = summary.trim()
+    if (cleaned.isBlank()) return ""
+    val prefix = "推荐依据："
+    val body = cleaned.removePrefix(prefix)
+    val labels = body
+        .split("、", "·", ",", "，")
+        .map { sourceLabelForUser(it) }
+        .filter { it.isNotBlank() }
+        .distinct()
+    return if (labels.isEmpty()) "" else prefix + labels.joinToString("、")
+}
+
+private fun sourceLabelForUser(source: String): String {
+    return when (source.trim()) {
+        "商品库结构化字段", "商品库字段", "结构化字段", "价格库存销量评分" -> "价格/销量/评分"
+        "用户约束匹配", "预算约束", "你的预算条件" -> "你的预算条件"
+        "商品标题/描述/规格", "商品规格/知识字段", "商品描述/规格" -> "商品规格"
+        "用户评价摘要", "评论摘要", "用户评价" -> "用户评价"
+        "知识库片段" -> "商品知识"
+        else -> source.trim()
+    }
+}
+
+private fun formatReasonForUser(reason: String): String {
+    val trimmed = reason.trim()
+    parsePricePair(trimmed, "预算内")?.let { (price, _) ->
+        return "预算内：${price} 元"
+    }
+    parsePricePair(trimmed, "超预算")?.let { (price, budget) ->
+        val gap = price - budget
+        return if (gap > 0) "预算外：比预算高 ${gap} 元" else "预算外"
+    }
+    return trimmed
+}
+
+private fun parsePricePair(text: String, prefix: String): Pair<Int, Int>? {
+    if (!text.startsWith("$prefix：")) return null
+    val numbers = Regex("\\d+").findAll(text).map { it.value.toIntOrNull() }.filterNotNull().toList()
+    return if (numbers.size >= 2) numbers[0] to numbers[1] else null
 }

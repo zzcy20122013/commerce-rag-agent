@@ -15,6 +15,7 @@ from app.scripts.seed_products import seed_product_images, seed_products
 from app.services.constraint_parser import merge_exclusions, parse_constraints
 from app.services.image_service import resolve_upload_path
 from app.services.log_service import log_recommendation, log_retrieval
+from app.services.product_service import get_products_by_ids
 from app.services.runtime_stats import runtime_stats
 from app.services.session_service import add_message, ensure_session, get_latest_memory, update_session_title_from_first_message
 
@@ -40,7 +41,7 @@ def chat_stream(payload: ChatStreamRequest, db: Session = Depends(get_db)) -> St
     update_session_title_from_first_message(db, session_id=session.id, message=payload.message)
     session_memory = payload.memory if payload.memory is not None else get_latest_memory(db, session_id=session.id)
     constraint_result = parse_constraints(payload.message)
-    session_memory = apply_negative_constraints_to_memory(session_memory, constraint_result)
+    session_memory = apply_negative_constraints_to_memory(session_memory, constraint_result, db=db)
     if payload.upload_id:
         image_path = resolve_upload_path(payload.upload_id)
         if image_path:
@@ -146,15 +147,46 @@ def sse(event: str, data: object) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def apply_negative_constraints_to_memory(memory: dict | None, constraint_result: dict) -> dict:
+def apply_negative_constraints_to_memory(memory: dict | None, constraint_result: dict, *, db: Session | None = None) -> dict:
     updated = dict(memory or {})
-    exclusions = merge_exclusions(updated.get("exclusions", []), constraint_result.get("exclusions", []))
+    new_exclusions = resolve_deictic_brand_exclusions(
+        updated,
+        constraint_result.get("exclusions", []),
+        db=db,
+    )
+    exclusions = merge_exclusions(updated.get("exclusions", []), new_exclusions)
     if exclusions:
         updated["exclusions"] = exclusions
     product_ids = constraint_result.get("exclude_product_ids") or []
     if product_ids:
         updated["exclude_product_ids"] = list(dict.fromkeys(updated.get("exclude_product_ids", []) + product_ids))
     return updated
+
+
+def resolve_deictic_brand_exclusions(
+    memory: dict,
+    exclusions: list[dict] | None,
+    *,
+    db: Session | None = None,
+) -> list[dict]:
+    if not exclusions or db is None:
+        return exclusions or []
+    resolved: list[dict] = []
+    for item in exclusions:
+        if item.get("kind") != "exclude_brand" or not is_deictic_brand_reference(item):
+            resolved.append(item)
+            continue
+        products = get_products_by_ids(db, list(memory.get("last_product_ids", []))[:1])
+        if not products or not products[0].brand:
+            resolved.append(item)
+            continue
+        resolved.append({**item, "value": products[0].brand})
+    return resolved
+
+
+def is_deictic_brand_reference(item: dict) -> bool:
+    text = f"{item.get('value', '')} {item.get('raw', '')}".strip()
+    return any(keyword in text for keyword in ["这个品牌", "这个牌子", "这个", "该品牌", "这牌子", "这品牌"])
 
 
 def iter_answer_chunks(answer: str, chunk_size: int = 2) -> Iterator[str]:

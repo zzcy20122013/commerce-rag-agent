@@ -14,7 +14,21 @@ def classify_intent(text: str) -> IntentResult:
     if _is_open_ended_purchase_question(normalized, constraints):
         return IntentResult(intent="decision_guide", confidence=0.86, constraints=constraints)
 
-    if _contains_any(normalized, ["还有吗", "其他的", "别的吗", "换一批", "再推荐", "再找", "有没有别的"]):
+    if _contains_any(
+        normalized,
+        [
+            "还有吗",
+            "其他的",
+            "其他品牌",
+            "有其他品牌",
+            "别的吗",
+            "别的品牌",
+            "换一批",
+            "再推荐",
+            "再找",
+            "有没有别的",
+        ],
+    ):
         return IntentResult(intent="clarification", confidence=0.72, constraints=constraints)
 
     if _contains_any(
@@ -109,7 +123,10 @@ def classify_intent(text: str) -> IntentResult:
         confidence = 0.82 if constraints.category or constraints.budget_max else 0.66
         return IntentResult(intent="shopping_guide", confidence=confidence, constraints=constraints)
 
-    if _contains_any(normalized, ["这两个", "这个", "有没有", "换一个", "更轻", "便宜点"]):
+    if _contains_any(
+        normalized,
+        ["这两个", "这个", "有没有", "换一个", "更轻", "便宜点", "不能超", "别超", "不超", "不要超", "卡死"],
+    ):
         return IntentResult(intent="clarification", confidence=0.55, constraints=constraints)
 
     return IntentResult(intent="chitchat", confidence=0.6, constraints=constraints)
@@ -133,6 +150,7 @@ def extract_shopping_constraints(text: str) -> ShoppingConstraints:
 def _extract_budget(text: str) -> int | None:
     cleaned = PRODUCT_ID_PATTERN.sub(" ", text)
     patterns = [
+        r"(\d{2,6})\s*(?:元|块)?\s*(?:真)?\s*(?:不能超|别超|不超|不要超|以内必须|必须以内|卡死)",
         r"(?:预算|价格|价位)?\s*(\d{2,6})\s*(?:元|块)\s*(?:以内|以下|内)?",
         r"(?:预算|价格|价位)\s*(?:<=|小于|不超过|低于)?\s*(\d{2,6})",
         r"(\d{2,6})\s*(?:以内|以下|under)",

@@ -186,6 +186,7 @@ def test_product_card_contains_explainable_evidence_sources() -> None:
     )
 
     evidence = card["evidence"]
-    assert any(item["source"] == "商品库结构化字段" for item in evidence)
-    assert any(item["source"] == "用户评价摘要" for item in evidence)
-    assert "推荐依据" in card["source_summary"]
+    assert any(item["source"] == "价格/销量/评分" for item in evidence)
+    assert any(item["source"] == "用户评价" for item in evidence)
+    assert card["source_summary"] == "推荐依据：价格/销量/评分、用户评价、商品规格"
+    assert "商品库结构化字段" not in card["source_summary"]

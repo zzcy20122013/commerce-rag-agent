@@ -12,6 +12,7 @@ PRODUCT_ID_PATTERN = re.compile(r"\b(p_[a-zA-Z0-9_]+)\b")
 
 EXCLUDE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(rf"(?:不要|不想要|不接受|排除)\s*([^ {PUNCTUATION}]{{1,30}}?品牌)"), "exclude_brand"),
+    (re.compile(rf"(?:不要|不想要|不接受|排除|别给我|别要|不想看)\s*([^ {PUNCTUATION}]{{1,30}}?牌子)"), "exclude_brand"),
     (re.compile(rf"非\s*([^ {PUNCTUATION}]{{1,30}}?)\s*品牌"), "exclude_brand"),
     (re.compile(rf"(?:不含|不要含|不能含|无)\s*([^ {PUNCTUATION}]{{1,30}})"), "exclude_ingredient"),
     (re.compile(rf"(?:不要|不想要|不接受|除了|排除)\s*([^ {PUNCTUATION}]{{1,30}})"), "exclude"),
@@ -108,11 +109,11 @@ def _clean_value(value: str) -> str:
 
 
 def _brand_value(value: str) -> str:
-    return _clean_value(value).replace("品牌", "").strip()
+    return _clean_value(value).replace("品牌", "").replace("牌子", "").strip()
 
 
 def _normal_key(value: str) -> str:
-    return value.replace("品牌", "").replace("的", "").strip().lower()
+    return value.replace("品牌", "").replace("牌子", "").replace("的", "").strip().lower()
 
 
 def _contains_unnegated(text: str, value: str) -> bool:

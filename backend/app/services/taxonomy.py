@@ -8,7 +8,21 @@ from app.models.tables import Product
 
 
 TAXONOMY_PATH = Path(__file__).resolve().parents[1] / "data" / "taxonomy.json"
-STRICT_FILTER_KEYWORDS = ["有哪些", "哪些", "有什么", "有哪几款", "列出", "清单"]
+STRICT_FILTER_KEYWORDS = [
+    "有哪些",
+    "哪些",
+    "有什么",
+    "有哪几款",
+    "列出",
+    "清单",
+    "不能超",
+    "别超",
+    "不超",
+    "不要超",
+    "绝对不能超",
+    "卡死",
+    "必须以内",
+]
 
 
 @dataclass
