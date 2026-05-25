@@ -613,7 +613,7 @@ private fun ChatInputBar(
                 if (previewUrl != null) {
                     Box(Modifier.padding(8.dp)) {
                         AsyncImage(
-                            model = previewUrl,
+                            model = ApiConfig.resolveUrl(previewUrl),
                             contentDescription = null,
                             modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
                             contentScale = ContentScale.Crop
