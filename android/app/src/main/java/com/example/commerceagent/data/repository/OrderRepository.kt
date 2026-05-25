@@ -1,6 +1,7 @@
 package com.example.commerceagent.data.repository
 
 import com.example.commerceagent.data.api.OrderApi
+import com.example.commerceagent.data.api.OrderApiException
 import com.example.commerceagent.data.mock.MockOrderStore
 import com.example.commerceagent.data.model.Order
 
@@ -25,6 +26,13 @@ class OrderRepository(
     suspend fun refund(orderId: String, reason: String): Order = runCatching { api.refund(orderId, reason) }
         .getOrElse { MockOrderStore.refund(orderId, reason) }
 
-    suspend fun delete(orderId: String): Boolean = runCatching { api.delete(orderId) }
-        .getOrElse { MockOrderStore.delete(orderId) }
+    suspend fun delete(orderId: String): Boolean {
+        return try {
+            api.delete(orderId)
+        } catch (error: OrderApiException) {
+            throw error
+        } catch (_: Throwable) {
+            MockOrderStore.delete(orderId)
+        }
+    }
 }

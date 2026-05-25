@@ -9,6 +9,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
+class OrderApiException(message: String) : IllegalStateException(message)
+
 class OrderApi(
     private val client: OkHttpClient = OkHttpClient()
 ) {
@@ -52,7 +54,7 @@ class OrderApi(
             .delete()
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) error("删除订单失败：${response.code}")
+            if (!response.isSuccessful) throw OrderApiException("删除订单失败：${response.code}")
             JSONObject(response.body?.string().orEmpty()).optBoolean("ok", true)
         }
     }
