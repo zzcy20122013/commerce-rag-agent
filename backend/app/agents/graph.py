@@ -13,13 +13,38 @@ from app.agents.shopping_guide import shopping_guide_node
 from app.agents.state import AgentState
 
 
+MORE_OPTIONS_FOLLOWUP_WORDS = [
+    "还有",
+    "其他",
+    "别的",
+    "换一批",
+    "再推荐",
+    "再找",
+    "有没有",
+]
+
+COMPARE_FOLLOWUP_WORDS = [
+    "区别",
+    "差别",
+    "对比",
+    "比较",
+    "哪个好",
+    "哪款好",
+    "哪个更",
+    "怎么选",
+]
+
+
 def router_node(state: AgentState) -> AgentState:
     result = classify_intent(state["query"])
     intent = result.intent
     memory = state.get("memory", {})
-    if intent == "clarification" and memory.get("category"):
+    query = state["query"].lower()
+    if intent == "clarification" and _contains_any(query, MORE_OPTIONS_FOLLOWUP_WORDS):
         intent = "shopping_guide"
-    if intent == "clarification" and len(memory.get("last_product_ids", [])) >= 2:
+    elif intent == "clarification" and memory.get("category"):
+        intent = "shopping_guide"
+    elif intent == "clarification" and len(memory.get("last_product_ids", [])) >= 2 and _contains_any(query, COMPARE_FOLLOWUP_WORDS):
         intent = "compare"
     return {
         **state,
@@ -118,3 +143,7 @@ def run_agent(
             "trace": [],
         }
     )
+
+
+def _contains_any(text: str, keywords: list[str]) -> bool:
+    return any(keyword in text for keyword in keywords)

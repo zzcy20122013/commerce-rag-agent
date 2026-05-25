@@ -68,6 +68,77 @@ def test_purchase_agent_can_view_update_and_remove_cart_items() -> None:
         db.close()
 
 
+def test_purchase_agent_can_clear_cart() -> None:
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    db = TestingSession()
+    try:
+        db.add_all([
+            _product("p_pants_001", "黑色通勤直筒裤", 199),
+            _product("p_skirt_001", "法式半身裙", 169),
+        ])
+        db.commit()
+
+        node = purchase_help_node(db)
+        node({"query": "把刚才推荐的都加入购物车", "memory": {"last_product_ids": ["p_pants_001", "p_skirt_001"]}, "trace": []})
+        result = node({"query": "清空购物车", "memory": {"last_product_ids": ["p_pants_001"]}, "trace": []})
+
+        assert "已清空购物车" in result["answer"]
+        assert list_cart_items(db) == []
+    finally:
+        db.close()
+
+
+def test_purchase_agent_treats_common_view_phrases_as_view_only() -> None:
+    for phrase in ["看看购物车", "打开购物车", "购物车"]:
+        engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        TestingSession = sessionmaker(bind=engine)
+        Base.metadata.create_all(bind=engine)
+
+        db = TestingSession()
+        try:
+            db.add_all([
+                _product("p_pants_001", "黑色通勤直筒裤", 199),
+                _product("p_skirt_001", "法式半身裙", 169),
+            ])
+            db.commit()
+
+            node = purchase_help_node(db)
+            node({"query": "把刚才推荐的都加入购物车", "memory": {"last_product_ids": ["p_pants_001", "p_skirt_001"]}, "trace": []})
+            result = node({"query": phrase, "memory": {"last_product_ids": ["p_pants_001"]}, "trace": []})
+
+            assert "当前购物车" in result["answer"]
+            assert [item["quantity"] for item in list_cart_items(db)] == [1, 1]
+        finally:
+            db.close()
+
+
+def test_purchase_agent_treats_common_clear_phrases_as_clear() -> None:
+    for phrase in ["把购物车清掉", "购物车里的都删掉", "全部删掉"]:
+        engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        TestingSession = sessionmaker(bind=engine)
+        Base.metadata.create_all(bind=engine)
+
+        db = TestingSession()
+        try:
+            db.add_all([
+                _product("p_pants_001", "黑色通勤直筒裤", 199),
+                _product("p_skirt_001", "法式半身裙", 169),
+            ])
+            db.commit()
+
+            node = purchase_help_node(db)
+            node({"query": "把刚才推荐的都加入购物车", "memory": {"last_product_ids": ["p_pants_001", "p_skirt_001"]}, "trace": []})
+            result = node({"query": phrase, "memory": {"last_product_ids": ["p_pants_001"]}, "trace": []})
+
+            assert "已清空购物车" in result["answer"]
+            assert list_cart_items(db) == []
+        finally:
+            db.close()
+
+
 def test_purchase_agent_prefers_explicit_product_id_over_memory() -> None:
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     TestingSession = sessionmaker(bind=engine)
@@ -91,6 +162,35 @@ def test_purchase_agent_prefers_explicit_product_id_over_memory() -> None:
         )
 
         assert [item["product"]["id"] for item in list_cart_items(db)] == ["p_skirt_001"]
+    finally:
+        db.close()
+
+
+def test_purchase_agent_selects_named_brand_from_recent_recommendations() -> None:
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    db = TestingSession()
+    try:
+        db.add_all([
+            _product("p_digital_019", "vivo Pad 6 Pro 12.1英寸平板", 3299, brand="vivo", category="数码电子"),
+            _product("p_digital_011", "小米平板 8 Pro 12.1英寸平板", 3299, brand="小米", category="数码电子"),
+        ])
+        db.commit()
+
+        node = purchase_help_node(db)
+        result = node(
+            {
+                "query": "把小米加入购物车",
+                "memory": {"last_product_ids": ["p_digital_019", "p_digital_011"]},
+                "trace": [],
+            }
+        )
+
+        cart_items = list_cart_items(db)
+        assert "已加入购物车" in result["answer"]
+        assert [item["product"]["id"] for item in cart_items] == ["p_digital_011"]
     finally:
         db.close()
 
@@ -233,12 +333,20 @@ def test_purchase_agent_removes_cart_item_by_recent_position_phrase() -> None:
         db.close()
 
 
-def _product(product_id: str, title: str, price: int, *, stock: int = 10) -> Product:
+def _product(
+    product_id: str,
+    title: str,
+    price: int,
+    *,
+    stock: int = 10,
+    brand: str = "测试品牌",
+    category: str = "服饰运动",
+) -> Product:
     return Product(
         id=product_id,
         title=title,
-        category="服饰运动",
-        brand="测试品牌",
+        category=category,
+        brand=brand,
         price=price,
         description=title,
         rating=4.6,

@@ -53,6 +53,8 @@ def compare_node(db: Session):
 
 def build_compare_answer(products, *, query: str = "", docs_by_product: dict | None = None) -> str:
     docs_by_product = docs_by_product or {}
+    if _asks_for_difference(query) and len(products) >= 2:
+        return build_difference_answer(products[:2], docs_by_product=docs_by_product)
     best_match = _best_match_for_query(products, query, docs_by_product)
     cheapest = min(products, key=lambda product: product.price)
     winner = best_match or cheapest
@@ -77,6 +79,24 @@ def build_compare_answer(products, *, query: str = "", docs_by_product: dict | N
     else:
         lines.append(f"我的建议是先看 {winner.title}，它在价格和需求匹配上更稳。")
     return "\n".join(lines)
+
+
+def build_difference_answer(products, *, docs_by_product: dict | None = None) -> str:
+    docs_by_product = docs_by_product or {}
+    first, second = products[0], products[1]
+    first_points = _difference_points(first, docs_by_product.get(first.id, []))
+    second_points = _difference_points(second, docs_by_product.get(second.id, []))
+    first_name = _short_product_name(first.title)
+    second_name = _short_product_name(second.title)
+    shared_price = first.price == second.price
+    price_intro = f"价格都在 {first.price} 元" if shared_price else f"价格分别是 {first.price} 元和 {second.price} 元"
+    recommendation = _difference_recommendation(first, second, first_points, second_points)
+    return (
+        f"它们的主要区别在使用侧重点，不是单纯价格差：{price_intro}。"
+        f"{first_name} 更偏学习和轻办公稳定性，{_join_points(first_points)}。"
+        f"{second_name} 更偏影音、高刷和手机生态联动，{_join_points(second_points)}。"
+        f"{recommendation}"
+    )
 
 
 def _ordered_compare_products(products, winner, cheapest):
@@ -230,6 +250,77 @@ def _winner_reason(winner, cheapest, keywords: list[str]) -> str:
     if cheapest and winner.id == cheapest.id:
         return "价格更低，适合作为优先选择"
     return "综合评分和商品信息更占优"
+
+
+def _asks_for_difference(query: str) -> bool:
+    return any(keyword in query for keyword in ["区别", "差别", "不同", "差在哪", "哪里不一样"])
+
+
+def _difference_points(product, docs: list[dict]) -> list[str]:
+    text = _product_compare_text(product, docs)
+    specs = _safe_json(product.specs_json)
+    points: list[str] = []
+    sku_text = " ".join(str(item) for item in specs.get("sku_options", []))
+    if "5G" in sku_text or "全网通" in sku_text:
+        points.append("可选 5G/全网通版本，外出联网更省心")
+    elif any(keyword in text for keyword in ["仅支持Wi-Fi", "纯Wi-Fi", "没有插卡", "没有内置插卡", "没法直接插SIM"]):
+        points.append("只有 Wi-Fi 版本，外出要靠热点或随身 Wi-Fi")
+    if "2.8K" in text or "144Hz" in text:
+        values = []
+        if "2.8K" in text:
+            values.append("2.8K")
+        if "144Hz" in text:
+            values.append("144Hz 高刷")
+        points.append("屏幕卖点更偏" + " + ".join(values))
+    if "跨屏互联" in text or "小米生态" in text:
+        points.append("和小米手机跨屏互联更方便")
+    if "学习模式" in text or "低蓝光" in text:
+        points.append("有学习/护眼显示优化")
+    if "OTG" in text or "移动硬盘" in text:
+        points.append("支持 OTG 外接移动硬盘")
+    if "4个应用窗口" in text or "四个APP" in text or "4个窗口" in text:
+        points.append("多任务最多可到 4 个窗口")
+    if "4096级压感" in text or "2ms" in text:
+        points.append("触控笔书写能力描述更具体")
+    review_summary = specs.get("review_summary") or {}
+    negative_count = int(review_summary.get("negative_review_count") or 0)
+    if negative_count > 0:
+        points.append(f"评价里有 {negative_count} 条明显负反馈，建议下单前重点看差评")
+    if product.sales:
+        points.append(f"销量 {product.sales}")
+    if product.rating:
+        points.append(f"评分 {product.rating:.1f}")
+    return list(dict.fromkeys(points))[:5]
+
+
+def _product_compare_text(product, docs: list[dict]) -> str:
+    return " ".join(
+        [
+            product.title,
+            product.description,
+            product.specs_json or "",
+            " ".join(doc.get("text", "") for doc in docs),
+        ]
+    )
+
+
+def _join_points(points: list[str]) -> str:
+    return "；".join(points[:4]) if points else "商品库里没有更多可确认的细项参数"
+
+
+def _difference_recommendation(first, second, first_points: list[str], second_points: list[str]) -> str:
+    first_text = " ".join(first_points)
+    second_text = " ".join(second_points)
+    if "学习" in first_text or "护眼" in first_text or "OTG" in first_text or first.sales >= second.sales:
+        return f"如果主要是学生记笔记、网课和轻办公，您可以优先看 {_short_product_name(first.title)}；如果更看重高刷影音或已经在用小米手机，再看 {_short_product_name(second.title)}。"
+    return f"如果您更看重高刷影音或生态联动，可以优先看 {_short_product_name(second.title)}；如果更看重学习办公稳定性，再看 {_short_product_name(first.title)}。"
+
+
+def _short_product_name(title: str) -> str:
+    for marker in [" 12.1", " 11", " 高刷", " 学习", " 轻薄"]:
+        if marker in title:
+            return title.split(marker, 1)[0]
+    return _short_text(title, limit=24)
 
 
 def _safe_json(value: str) -> dict:

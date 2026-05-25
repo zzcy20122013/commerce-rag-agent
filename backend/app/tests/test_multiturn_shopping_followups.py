@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.agents.intent_router import classify_intent
-from app.agents.shopping_guide import merge_memory, shopping_guide_node
+from app.agents.shopping_guide import build_recommendation_answer, merge_memory, shopping_guide_node
 from app.api.chat import apply_negative_constraints_to_memory
 from app.llm.generation import GenerationResult
 from app.models.db import Base
@@ -22,6 +22,29 @@ def test_common_followup_phrases_keep_shopping_context() -> None:
 
         assert result.intent in {"clarification", "shopping_guide"}
         assert result.intent != "chitchat"
+
+
+def test_recommendation_answer_hides_internal_reason_expressions() -> None:
+    answer = build_recommendation_answer(
+        [
+            {
+                "title": "vivo Pad 6 Pro 12.1英寸高刷全面屏学习娱乐多任务办公平板电脑",
+                "price": 3299,
+                "reasons": ["预算内：3299<=3500", "适合记笔记", "销量较高：1750"],
+            },
+            {
+                "title": "小米平板 8 Pro 12.1英寸高刷大屏影音娱乐学习办公平板电脑",
+                "price": 3299,
+                "reasons": ["预算内：3299<=3500", "适合记笔记"],
+            },
+        ],
+        {"budget_max": 3500, "category": "数码电子", "subcategory": "平板"},
+    )
+
+    assert "<=" not in answer
+    assert "3299<=3500" not in answer
+    assert "3500 元预算内" in answer
+    assert "适合记笔记" in answer
 
 
 def test_other_brand_followup_excludes_last_recommendations() -> None:

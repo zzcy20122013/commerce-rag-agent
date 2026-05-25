@@ -138,6 +138,20 @@ def remove_cart_item_by_position(db: Session, *, position: int, user_id: str = "
     return item
 
 
+def clear_cart_items(db: Session, *, user_id: str = "debug-user") -> int:
+    items = list(
+        db.scalars(
+            select(CartItem)
+            .where(CartItem.user_id == user_id)
+            .order_by(CartItem.created_at.asc())
+        ).all()
+    )
+    for item in items:
+        db.delete(item)
+    db.commit()
+    return len(items)
+
+
 def checkout_cart(db: Session, *, user_id: str = "debug-user") -> dict:
     rows = list(
         db.execute(

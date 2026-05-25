@@ -449,27 +449,66 @@ def build_recommendation_answer(
     top_card = cards[0]
     top_reason_text = format_card_reasons(top_card)
     if len(cards) == 1:
+        reason_sentence = f"它比较合适的点是{top_reason_text}。" if top_reason_text else ""
         return (
             f"{exclusion_intro}"
-            f"我会先看这款：{top_card['title']}，价格是 {top_card['price']} 元。"
-            f"{f'主推理由是{top_reason_text}。' if top_reason_text else ''}"
-            "如果你想更稳一点，可以再补充预算、品牌偏好或不能接受的点，我再帮你缩小范围。"
+            f"您可以优先看 {top_card['title']}，价格 {top_card['price']} 元。"
+            f"{reason_sentence}"
+            "如果您还想更稳一点，可以再告诉我品牌偏好或不能接受的点，我继续帮您缩小范围。"
         )
     second_card = cards[1]
     second_reason_text = format_card_reasons(second_card, limit=2)
+    top_reason_sentence = f"，主要是因为{top_reason_text}" if top_reason_text else ""
+    second_reason_sentence = f"，它的优势是{second_reason_text}" if second_reason_text else ""
     return (
         f"{exclusion_intro}"
-        f"这几款里我会优先看 {top_card['title']}，价格 {top_card['price']} 元，"
-        f"{f'主推理由是{top_reason_text}。' if top_reason_text else '整体更贴近你的需求。'}"
-        f"如果你想留个备选，可以再看看 {second_card['title']}，它是 {second_card['price']} 元"
-        f"{f'，主要优势是{second_reason_text}' if second_reason_text else ''}。"
-        "我建议你先按预算和最在意的使用场景二选一，不用只盯参数。"
+        f"您可以优先看 {top_card['title']}，价格 {top_card['price']} 元{top_reason_sentence}。"
+        f"如果您想留个备选，可以再看看 {second_card['title']}，它是 {second_card['price']} 元{second_reason_sentence}。"
+        "建议您先按预算和最常用的场景来选，不用只盯参数。"
     )
 
 
 def format_card_reasons(card: dict, *, limit: int = 3) -> str:
-    reasons = [str(reason) for reason in card.get("reasons", []) if str(reason).strip()]
+    reasons = [
+        formatted
+        for reason in card.get("reasons", [])
+        if (formatted := format_reason_for_answer(str(reason), card)).strip()
+    ]
     return "、".join(reasons[:limit])
+
+
+def format_reason_for_answer(reason: str, card: dict) -> str:
+    text = reason.strip()
+    if not text:
+        return ""
+    if text.startswith("预算内"):
+        budget = _extract_reason_budget(text)
+        if budget:
+            return f"在 {budget} 元预算内"
+        return "价格在预算内"
+    if text.startswith("超预算"):
+        budget = _extract_reason_budget(text)
+        price = int(card.get("price") or 0)
+        if budget and price:
+            return f"比预算高 {price - budget} 元"
+        return "价格超出预算"
+    if text.startswith("销量较高"):
+        return "销量比较高"
+    if text.startswith("评分较高"):
+        return "用户评分不错"
+    if text.startswith("命中偏好："):
+        return f"符合你偏好的{text.split('：', 1)[1]}"
+    if text.startswith("品类匹配："):
+        return f"品类对口：{text.split('：', 1)[1]}"
+    return text
+
+
+def _extract_reason_budget(reason: str) -> int | None:
+    if "<=" in reason or ">" in reason:
+        tail = reason.rsplit("<=", 1)[-1] if "<=" in reason else reason.rsplit(">", 1)[-1]
+        digits = "".join(char for char in tail if char.isdigit())
+        return int(digits) if digits else None
+    return None
 
 
 def build_card_evidence(product: Product, memory: dict, reasons: list[str]) -> list[dict]:

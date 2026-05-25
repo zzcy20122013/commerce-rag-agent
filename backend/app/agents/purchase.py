@@ -7,6 +7,7 @@ from app.agents.shopping_guide import product_to_card
 from app.models.tables import Product
 from app.services.cart_service import (
     add_cart_item,
+    clear_cart_items,
     InsufficientStockError,
     list_cart_items,
     remove_cart_item_by_position,
@@ -23,6 +24,10 @@ def purchase_help_node(db: Session):
 
         if action == "view":
             return build_cart_state(state, db, trace_action="view")
+        if action == "clear":
+            removed_count = clear_cart_items(db)
+            answer = "已清空购物车。" if removed_count else "购物车本来就是空的。"
+            return build_cart_state(state, db, answer_prefix=answer, trace_action="clear")
         if action == "remove":
             position = resolve_cart_position(db, query) or 1
             product_name = cart_item_name_at(db, position)
@@ -96,13 +101,50 @@ def purchase_help_node(db: Session):
 
 def parse_cart_action(query: str) -> str:
     text = query.lower()
+    if is_clear_cart_request(text):
+        return "clear"
     if any(word in text for word in ["删除", "删掉", "移除", "去掉", "不要", "别要", "拿掉", "remove"]):
         return "remove"
     if any(word in text for word in ["数量", "改成", "改为", "改到", "加到"]) and re.search(r"\d|一|二|两|三|四|五", text):
         return "update"
-    if any(word in text for word in ["查看购物车", "购物车里", "车里", "购物车有什么", "cart"]):
+    if is_view_cart_request(text):
         return "view"
     return "add"
+
+
+def is_clear_cart_request(text: str) -> bool:
+    explicit_clear_words = ["清空", "清掉", "清除", "清一清", "删光", "清理"]
+    cart_words = ["购物车", "车里", "车内", "购物袋"]
+    if any(word in text for word in explicit_clear_words) and any(word in text for word in cart_words):
+        return True
+
+    all_words = ["全部", "全都", "都", "所有", "整个购物车", "购物车里"]
+    remove_words = ["删除", "删掉", "移除", "去掉", "不要", "拿掉"]
+    if any(word in text for word in all_words) and any(word in text for word in remove_words):
+        return True
+
+    return text.strip() in {"全删了", "全删掉", "都删了", "都删掉", "全部删掉", "全部删除"}
+
+
+def is_view_cart_request(text: str) -> bool:
+    if text.strip() in {"购物车", "cart"}:
+        return True
+    return any(
+        word in text
+        for word in [
+            "查看购物车",
+            "看看购物车",
+            "看下购物车",
+            "看一下购物车",
+            "打开购物车",
+            "购物车里",
+            "车里",
+            "购物车有什么",
+            "购物车有啥",
+            "购物车列表",
+            "cart",
+        ]
+    )
 
 
 def select_products_for_cart(db: Session, *, query: str, memory: dict) -> list[Product]:
@@ -115,6 +157,10 @@ def select_products_for_cart(db: Session, *, query: str, memory: dict) -> list[P
     products = get_products_by_ids(db, remembered_ids)
     if not products:
         products = find_products_by_query(db, query, limit=3)
+    else:
+        named_products = filter_products_by_query_terms(products, query)
+        if named_products:
+            products = named_products
 
     quotas = extract_category_quotas(query)
     if quotas and products:
@@ -133,6 +179,29 @@ def select_products_for_cart(db: Session, *, query: str, memory: dict) -> list[P
     if selection_count:
         return products[:selection_count]
     return products[:1]
+
+
+def filter_products_by_query_terms(products: list[Product], query: str) -> list[Product]:
+    normalized_query = query.lower()
+    scored: list[tuple[int, Product]] = []
+    for product in products:
+        score = product_query_match_score(product, normalized_query)
+        if score:
+            scored.append((score, product))
+    return [product for _, product in sorted(scored, key=lambda item: item[0], reverse=True)]
+
+
+def product_query_match_score(product: Product, normalized_query: str) -> int:
+    brand = (product.brand or "").lower()
+    title = (product.title or "").lower()
+    product_id = (product.id or "").lower()
+    score = 0
+    if product_id and product_id in normalized_query:
+        score += 100
+    if brand and brand in normalized_query:
+        score += 80 + len(brand)
+    score += best_title_overlap_score(title, normalized_query)
+    return score
 
 
 def extract_category_quotas(query: str) -> list[tuple[str, int]]:
