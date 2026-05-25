@@ -14,6 +14,7 @@ from app.services.cart_service import (
     remove_cart_item_by_position,
     update_cart_item_quantity_by_position,
 )
+from app.services.order_service import ShippingAddressError
 
 
 router = APIRouter(prefix="/api/cart", tags=["cart"])
@@ -26,6 +27,16 @@ class AddCartItemRequest(BaseModel):
 
 class UpdateCartItemRequest(BaseModel):
     quantity: int
+
+
+class ShippingAddressRequest(BaseModel):
+    recipient_name: str
+    phone: str
+    address: str
+
+
+class CheckoutRequest(BaseModel):
+    shipping_address: ShippingAddressRequest
 
 
 @router.get("")
@@ -93,12 +104,14 @@ def remove_item(position: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/checkout")
-def checkout(db: Session = Depends(get_db)) -> dict:
+def checkout(payload: CheckoutRequest, db: Session = Depends(get_db)) -> dict:
     init_db()
     try:
-        return checkout_cart(db)
+        return checkout_cart(db, shipping_address=payload.shipping_address.model_dump())
     except EmptyCartError as error:
         raise HTTPException(status_code=400, detail="购物车为空") from error
+    except ShippingAddressError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     except InsufficientStockError as error:
         raise HTTPException(
             status_code=409,

@@ -57,12 +57,13 @@ def test_checkout_cart_deducts_stock_creates_orders_and_clears_cart() -> None:
         add_cart_item(db, product_id="p_pants_001", quantity=2)
         add_cart_item(db, product_id="p_pants_002", quantity=1)
 
-        result = checkout_cart(db)
+        result = checkout_cart(db, shipping_address=_shipping_address())
 
         assert result["total"] == 199 * 2 + 159
         assert result["cart"]["items"] == []
         assert len(result["order_ids"]) == 1
         assert result["orders"][0]["status"] == "待支付"
+        assert result["orders"][0]["shipping_address"] == _shipping_address()
         assert len(result["orders"][0]["items"]) == 2
         assert db.get(Product, "p_pants_001").stock == 0
         assert db.get(Product, "p_pants_002").stock == 0
@@ -88,7 +89,7 @@ def test_checkout_cart_rejects_insufficient_stock_without_partial_deduction() ->
         db.commit()
 
         try:
-            checkout_cart(db)
+            checkout_cart(db, shipping_address=_shipping_address())
             raise AssertionError("checkout should reject insufficient stock")
         except InsufficientStockError as error:
             assert error.product_id == "p_pants_001"
@@ -113,3 +114,11 @@ def _product(product_id: str, title: str, price: int, *, stock: int = 10) -> Pro
         stock=stock,
         image_url="",
     )
+
+
+def _shipping_address() -> dict:
+    return {
+        "recipient_name": "张三",
+        "phone": "13800000000",
+        "address": "上海市浦东新区世纪大道 100 号 8 楼",
+    }

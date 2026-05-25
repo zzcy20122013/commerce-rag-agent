@@ -44,13 +44,23 @@ def find_order(db: Session, query: str, *, user_id: str = "debug-user") -> Order
     return db.scalar(select(Order).where(Order.user_id == user_id).order_by(Order.created_at.desc()))
 
 
-def create_order_from_cart_rows(db: Session, rows: list[tuple], *, user_id: str = "debug-user") -> dict:
+def create_order_from_cart_rows(
+    db: Session,
+    rows: list[tuple],
+    *,
+    shipping_address: dict,
+    user_id: str = "debug-user",
+) -> dict:
     first_product = rows[0][1]
+    address = normalize_shipping_address(shipping_address)
     order = Order(
         id=f"ord_{uuid.uuid4().hex[:12]}",
         user_id=user_id,
         product_id=first_product.id,
         status="待支付",
+        shipping_recipient_name=address["recipient_name"],
+        shipping_phone=address["phone"],
+        shipping_address=address["address"],
         logistics_status="订单已提交，库存已锁定，等待支付。",
         return_status="未申请售后",
     )
@@ -167,6 +177,11 @@ def serialize_order(db: Session, order: Order) -> dict:
         "status": order.status,
         "logistics_status": order.logistics_status,
         "return_status": order.return_status,
+        "shipping_address": {
+            "recipient_name": order.shipping_recipient_name or "",
+            "phone": order.shipping_phone or "",
+            "address": order.shipping_address or "",
+        },
         "created_at": order.created_at.isoformat() if order.created_at else "",
         "items": items,
         "total": total,
@@ -174,6 +189,10 @@ def serialize_order(db: Session, order: Order) -> dict:
 
 
 class OrderNotFoundError(Exception):
+    pass
+
+
+class ShippingAddressError(ValueError):
     pass
 
 
@@ -246,3 +265,16 @@ def _order_product_payload(product_id: str, title: str, price: int, stock: int, 
         "stock": stock,
         "image_url": image_url,
     }
+
+
+def normalize_shipping_address(shipping_address: dict | None) -> dict:
+    payload = shipping_address or {}
+    address = {
+        "recipient_name": str(payload.get("recipient_name") or "").strip(),
+        "phone": str(payload.get("phone") or "").strip(),
+        "address": str(payload.get("address") or "").strip(),
+    }
+    missing_fields = [field for field, value in address.items() if not value]
+    if missing_fields:
+        raise ShippingAddressError("收货人、手机号和收货地址都不能为空")
+    return address

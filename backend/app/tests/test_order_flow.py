@@ -32,7 +32,7 @@ def test_checkout_creates_one_order_with_items_then_status_flow() -> None:
         add_cart_item(db, product_id="p_pants_001", quantity=2)
         add_cart_item(db, product_id="p_pants_002", quantity=1)
 
-        result = checkout_cart(db)
+        result = checkout_cart(db, shipping_address=_shipping_address())
 
         assert len(result["order_ids"]) == 1
         order_id = result["order_ids"][0]
@@ -40,6 +40,7 @@ def test_checkout_creates_one_order_with_items_then_status_flow() -> None:
         assert detail is not None
         assert detail["status"] == "待支付"
         assert detail["total"] == 557
+        assert detail["shipping_address"] == _shipping_address()
         assert [item["quantity"] for item in detail["items"]] == [2, 1]
         assert db.get(Product, "p_pants_001").stock == 1
         assert db.get(Product, "p_pants_002").stock == 1
@@ -86,12 +87,14 @@ def test_orders_api_lists_and_updates_order_status(monkeypatch) -> None:
     client = TestClient(app)
 
     assert client.post("/api/cart/items", json={"product_id": "p_pants_001", "quantity": 1}).status_code == 200
-    checked_out = client.post("/api/cart/checkout").json()
+    checked_out = client.post("/api/cart/checkout", json={"shipping_address": _shipping_address()}).json()
     order_id = checked_out["order_ids"][0]
+    assert checked_out["orders"][0]["shipping_address"] == _shipping_address()
 
     orders = client.get("/api/orders").json()
     assert orders["orders"][0]["id"] == order_id
     assert orders["orders"][0]["status"] == "待支付"
+    assert orders["orders"][0]["shipping_address"] == _shipping_address()
 
     paid = client.post(f"/api/orders/{order_id}/pay").json()
     assert paid["status"] == "已支付"
@@ -111,7 +114,7 @@ def test_delete_waiting_payment_order_releases_stock_and_removes_items() -> None
         db.add(_product("p_pants_001", "通勤直筒长裤", 199, stock=2))
         db.commit()
         add_cart_item(db, product_id="p_pants_001", quantity=2)
-        order_id = checkout_cart(db)["order_ids"][0]
+        order_id = checkout_cart(db, shipping_address=_shipping_address())["order_ids"][0]
         assert db.get(Product, "p_pants_001").stock == 0
 
         result = delete_order_record(db, order_id)
@@ -145,3 +148,11 @@ def _product(product_id: str, title: str, price: int, *, stock: int = 10) -> Pro
         stock=stock,
         image_url="",
     )
+
+
+def _shipping_address() -> dict:
+    return {
+        "recipient_name": "张三",
+        "phone": "13800000000",
+        "address": "上海市浦东新区世纪大道 100 号 8 楼",
+    }

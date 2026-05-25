@@ -85,6 +85,22 @@ class CartJsonParsersTest {
             """
             {
               "order_ids": ["ord_abc"],
+              "orders": [
+                {
+                  "id": "ord_abc",
+                  "status": "待支付",
+                  "logistics_status": "订单已提交，库存已锁定，等待支付。",
+                  "return_status": "未申请售后",
+                  "shipping_address": {
+                    "recipient_name": "张三",
+                    "phone": "13800000000",
+                    "address": "上海市浦东新区世纪大道 100 号 8 楼"
+                  },
+                  "created_at": "2026-05-24T10:00:00+00:00",
+                  "total": 398,
+                  "items": []
+                }
+              ],
               "items": [
                 {
                   "id": "cart_001",
@@ -112,6 +128,8 @@ class CartJsonParsersTest {
 
         assertEquals(listOf("ord_abc"), result.orderIds)
         assertEquals(398, result.total)
+        assertEquals("张三", result.orders[0].shippingAddress.recipientName)
+        assertEquals("上海市浦东新区世纪大道 100 号 8 楼", result.orders[0].shippingAddress.address)
         assertEquals(1, result.items.size)
         assertEquals(0, result.items[0].product.stock)
         assertEquals(emptyList<Any>(), result.cart.items)

@@ -6,6 +6,7 @@ import com.example.commerceagent.data.model.CartProduct
 import com.example.commerceagent.data.model.CheckoutResult
 import com.example.commerceagent.data.model.Order
 import com.example.commerceagent.data.model.OrderItem
+import com.example.commerceagent.data.model.ShippingAddress
 
 object MockCartStore {
     private val quantities = linkedMapOf<String, Int>()
@@ -33,7 +34,7 @@ object MockCartStore {
         return buildCart()
     }
 
-    fun checkout(): CheckoutResult {
+    fun checkout(shippingAddress: ShippingAddress): CheckoutResult {
         val checkedOutItems = buildCart().items
         val total = checkedOutItems.sumOf { it.subtotal }
         val order = Order(
@@ -41,6 +42,7 @@ object MockCartStore {
             status = "待支付",
             logisticsStatus = "订单已提交，库存已锁定，等待支付。",
             returnStatus = "未申请售后",
+            shippingAddress = shippingAddress,
             createdAt = "2026-05-24T10:00:00+00:00",
             total = total,
             items = checkedOutItems.mapIndexed { index, item ->

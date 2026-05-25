@@ -105,7 +105,7 @@ Android 是正式展示端，用于验证接近移动端产品形态的聊天、
 - `POST /api/cart/items`：加入购物车。
 - `PUT /api/cart/items/{position}`：按位置修改购物车商品数量。
 - `DELETE /api/cart/items/{position}`：按位置删除购物车商品。
-- `POST /api/cart/checkout`：提交购物车订单，校验并扣减库存，生成待支付订单后清空购物车。
+- `POST /api/cart/checkout`：提交购物车订单，需携带 `shipping_address`，校验并扣减库存，生成带收货地址快照的待支付订单后清空购物车。
 - `GET /api/orders`：查看订单列表。
 - `GET /api/orders/{id}`：查看订单详情。
 - `POST /api/orders/{id}/pay`：模拟支付。

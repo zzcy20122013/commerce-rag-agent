@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -25,6 +26,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -43,11 +45,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.commerceagent.data.api.ApiConfig
 import com.example.commerceagent.data.model.CartItem
+import com.example.commerceagent.data.model.ShippingAddress
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -101,8 +105,9 @@ fun CheckoutScreen(
         bottomBar = {
             CheckoutBottomBar(
                 total = state.total,
-                enabled = state.items.isNotEmpty() && !state.isLoading && !state.isSubmitting,
+                enabled = state.items.isNotEmpty() && state.isAddressComplete && !state.isLoading && !state.isSubmitting,
                 isSubmitting = state.isSubmitting,
+                addressComplete = state.isAddressComplete,
                 onSubmit = viewModel::submitOrder
             )
         }
@@ -120,6 +125,14 @@ fun CheckoutScreen(
                     text = if (state.items.isEmpty()) "请先从购物车选择要购买的商品" else "共 ${state.items.sumOf { it.quantity }} 件商品",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.Gray
+                )
+            }
+            item {
+                ShippingAddressSection(
+                    shippingAddress = state.shippingAddress,
+                    onRecipientNameChange = viewModel::updateRecipientName,
+                    onPhoneChange = viewModel::updatePhone,
+                    onAddressChange = viewModel::updateAddress
                 )
             }
             state.error?.let { error ->
@@ -165,6 +178,55 @@ fun CheckoutScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ShippingAddressSection(
+    shippingAddress: ShippingAddress,
+    onRecipientNameChange: (String) -> Unit,
+    onPhoneChange: (String) -> Unit,
+    onAddressChange: (String) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFF3FAF7)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("收货地址确认", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            }
+            OutlinedTextField(
+                value = shippingAddress.recipientName,
+                onValueChange = onRecipientNameChange,
+                label = { Text("收货人") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = shippingAddress.phone,
+                onValueChange = onPhoneChange,
+                label = { Text("手机号") },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = shippingAddress.address,
+                onValueChange = onAddressChange,
+                label = { Text("详细地址") },
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -220,6 +282,7 @@ private fun CheckoutBottomBar(
     total: Int,
     enabled: Boolean,
     isSubmitting: Boolean,
+    addressComplete: Boolean,
     onSubmit: () -> Unit
 ) {
     Surface(tonalElevation = 4.dp) {
@@ -254,6 +317,14 @@ private fun CheckoutBottomBar(
                 }
                 Spacer(Modifier.width(8.dp))
                 Text("提交订单")
+            }
+            if (!addressComplete) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "补全收货地址后才能提交订单",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }

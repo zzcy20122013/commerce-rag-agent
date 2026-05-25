@@ -11,6 +11,7 @@ import com.example.commerceagent.data.model.Order
 import com.example.commerceagent.data.model.OrderItem
 import com.example.commerceagent.data.model.Session
 import com.example.commerceagent.data.model.SessionMessage
+import com.example.commerceagent.data.model.ShippingAddress
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -108,9 +109,19 @@ fun JSONObject.toOrder(): Order {
         status = optString("status"),
         logisticsStatus = optString("logistics_status"),
         returnStatus = optString("return_status"),
+        shippingAddress = optJSONObject("shipping_address").toShippingAddress(),
         createdAt = optString("created_at"),
         items = List(itemsJson.length()) { index -> itemsJson.getJSONObject(index).toOrderItem() },
         total = optInt("total")
+    )
+}
+
+private fun JSONObject?.toShippingAddress(): ShippingAddress {
+    val json = this ?: JSONObject()
+    return ShippingAddress(
+        recipientName = json.optString("recipient_name"),
+        phone = json.optString("phone"),
+        address = json.optString("address")
     )
 }
 

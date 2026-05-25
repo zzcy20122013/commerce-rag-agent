@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.commerceagent.data.api.UploadApi
 import com.example.commerceagent.data.model.CartItem
 import com.example.commerceagent.data.model.ChatMessage
+import com.example.commerceagent.data.model.DefaultShippingAddress
 import com.example.commerceagent.data.model.MessageRole
 import com.example.commerceagent.data.model.SseEvent
 import com.example.commerceagent.data.repository.CartRepository
@@ -191,7 +192,7 @@ class ChatViewModel(
     fun checkoutCart() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isCartLoading = true)
-            runCatching { cartRepository.checkout() }
+            runCatching { cartRepository.checkout(DefaultShippingAddress) }
                 .onSuccess { result ->
                     val orderText = result.orderIds.joinToString("、").ifBlank { "模拟订单" }
                     val statusText = result.orders.firstOrNull()?.status ?: "待支付"

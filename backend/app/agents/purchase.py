@@ -24,6 +24,9 @@ def purchase_help_node(db: Session):
 
         if action == "view":
             return build_cart_state(state, db, trace_action="view")
+        if action == "checkout":
+            answer = "可以进入确认订单页，先确认收货地址，再核对商品、数量和总价后提交订单。"
+            return build_cart_state(state, db, answer_prefix=answer, trace_action="checkout_guidance")
         if action == "clear":
             removed_count = clear_cart_items(db)
             answer = "已清空购物车。" if removed_count else "购物车本来就是空的。"
@@ -103,6 +106,8 @@ def parse_cart_action(query: str) -> str:
     text = query.lower()
     if is_clear_cart_request(text):
         return "clear"
+    if is_checkout_guidance_request(text):
+        return "checkout"
     if any(word in text for word in ["删除", "删掉", "移除", "去掉", "不要", "别要", "拿掉", "remove"]):
         return "remove"
     if any(word in text for word in ["数量", "改成", "改为", "改到", "加到"]) and re.search(r"\d|一|二|两|三|四|五", text):
@@ -145,6 +150,13 @@ def is_view_cart_request(text: str) -> bool:
             "cart",
         ]
     )
+
+
+def is_checkout_guidance_request(text: str) -> bool:
+    checkout_words = ["怎么下单", "如何下单", "去结算", "提交订单", "确认订单", "checkout", "buy now"]
+    if any(word in text for word in checkout_words):
+        return True
+    return "下单" in text and not any(word in text for word in ["加入", "加购", "购物车"])
 
 
 def select_products_for_cart(db: Session, *, query: str, memory: dict) -> list[Product]:

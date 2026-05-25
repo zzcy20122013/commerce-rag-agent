@@ -1,6 +1,7 @@
 package com.example.commerceagent.data.mock
 
 import com.example.commerceagent.data.model.CartProduct
+import com.example.commerceagent.data.model.DefaultShippingAddress
 import com.example.commerceagent.data.model.Order
 import com.example.commerceagent.data.model.OrderItem
 
@@ -11,6 +12,7 @@ object MockOrderStore {
             status = "待支付",
             logisticsStatus = "订单已提交，库存已锁定，等待支付。",
             returnStatus = "未申请售后",
+            shippingAddress = DefaultShippingAddress,
             createdAt = "2026-05-24T10:00:00+00:00",
             total = 899,
             items = listOf(

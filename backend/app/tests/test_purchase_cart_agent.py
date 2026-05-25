@@ -91,6 +91,26 @@ def test_purchase_agent_can_clear_cart() -> None:
         db.close()
 
 
+def test_purchase_agent_guides_checkout_to_confirm_shipping_address() -> None:
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    db = TestingSession()
+    try:
+        db.add(_product("p_pants_001", "黑色通勤直筒裤", 199))
+        db.commit()
+
+        node = purchase_help_node(db)
+        node({"query": "把 p_pants_001 加入购物车", "memory": {}, "trace": []})
+        result = node({"query": "怎么下单", "memory": {}, "trace": []})
+
+        assert "确认收货地址" in result["answer"]
+        assert "当前购物车" in result["answer"]
+    finally:
+        db.close()
+
+
 def test_purchase_agent_treats_common_view_phrases_as_view_only() -> None:
     for phrase in ["看看购物车", "打开购物车", "购物车"]:
         engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})

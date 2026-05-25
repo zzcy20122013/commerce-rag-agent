@@ -172,6 +172,15 @@ private fun OrderCard(
             }
             HorizontalDivider()
             Spacer(Modifier.height(10.dp))
+            if (order.shippingAddress.isComplete) {
+                Text(
+                    "收货：${order.shippingAddress.recipientName} ${order.shippingAddress.phone}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(order.shippingAddress.address, color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+            }
             Text(order.logisticsStatus, style = MaterialTheme.typography.bodySmall)
             Text(order.returnStatus, color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(12.dp))

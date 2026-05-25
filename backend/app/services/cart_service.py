@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.tables import CartItem, Product, utc_now
-from app.services.order_service import create_order_from_cart_rows
+from app.services.order_service import create_order_from_cart_rows, normalize_shipping_address
 
 
 class CartServiceError(Exception):
@@ -152,7 +152,8 @@ def clear_cart_items(db: Session, *, user_id: str = "debug-user") -> int:
     return len(items)
 
 
-def checkout_cart(db: Session, *, user_id: str = "debug-user") -> dict:
+def checkout_cart(db: Session, *, shipping_address: dict | None = None, user_id: str = "debug-user") -> dict:
+    address = normalize_shipping_address(shipping_address)
     rows = list(
         db.execute(
             select(CartItem, Product)
@@ -173,7 +174,7 @@ def checkout_cart(db: Session, *, user_id: str = "debug-user") -> dict:
     total = sum(row["subtotal"] for row in checkout_items)
     for item, product in rows:
         product.stock -= item.quantity
-    order = create_order_from_cart_rows(db, rows, user_id=user_id)
+    order = create_order_from_cart_rows(db, rows, shipping_address=address, user_id=user_id)
     for item, _product in rows:
         db.delete(item)
     db.commit()

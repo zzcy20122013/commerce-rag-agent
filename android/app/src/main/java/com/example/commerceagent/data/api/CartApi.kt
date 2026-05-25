@@ -2,6 +2,7 @@ package com.example.commerceagent.data.api
 
 import com.example.commerceagent.data.model.Cart
 import com.example.commerceagent.data.model.CheckoutResult
+import com.example.commerceagent.data.model.ShippingAddress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -66,10 +67,18 @@ class CartApi(
         }
     }
 
-    suspend fun checkout(): CheckoutResult = withContext(Dispatchers.IO) {
+    suspend fun checkout(shippingAddress: ShippingAddress): CheckoutResult = withContext(Dispatchers.IO) {
+        val addressJson = JSONObject()
+            .put("recipient_name", shippingAddress.recipientName)
+            .put("phone", shippingAddress.phone)
+            .put("address", shippingAddress.address)
+        val body = JSONObject()
+            .put("shipping_address", addressJson)
+            .toString()
+            .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
             .url("${ApiConfig.BASE_URL}/api/cart/checkout")
-            .post(ByteArray(0).toRequestBody("application/json".toMediaType()))
+            .post(body)
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("提交订单失败：${response.code}")

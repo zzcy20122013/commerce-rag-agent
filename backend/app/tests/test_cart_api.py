@@ -73,12 +73,13 @@ def test_cart_api_checkout_deducts_stock_and_clears_cart(monkeypatch) -> None:
     client = TestClient(app)
 
     assert client.post("/api/cart/items", json={"product_id": "p_pants_001", "quantity": 2}).status_code == 200
-    checked_out = client.post("/api/cart/checkout").json()
+    checked_out = client.post("/api/cart/checkout", json={"shipping_address": _shipping_address()}).json()
 
     assert checked_out["cart"]["items"] == []
     assert checked_out["total"] == 398
     assert checked_out["items"][0]["product"]["stock"] == 0
     assert len(checked_out["order_ids"]) == 1
+    assert checked_out["orders"][0]["shipping_address"] == _shipping_address()
 
 
 def _product(product_id: str, title: str, price: int, *, stock: int = 10) -> Product:
@@ -94,3 +95,11 @@ def _product(product_id: str, title: str, price: int, *, stock: int = 10) -> Pro
         stock=stock,
         image_url="",
     )
+
+
+def _shipping_address() -> dict:
+    return {
+        "recipient_name": "张三",
+        "phone": "13800000000",
+        "address": "上海市浦东新区世纪大道 100 号 8 楼",
+    }
