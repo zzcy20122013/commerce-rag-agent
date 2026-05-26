@@ -28,3 +28,12 @@ fun chatPromptForSend(input: String, previewUrl: String?): String? {
     if (!previewUrl.isNullOrBlank()) return "请按这张图片找相似商品"
     return null
 }
+
+fun mergeImageRecognitionPrompt(currentInput: String, prompt: String): String {
+    val cleanPrompt = prompt.trim()
+    if (cleanPrompt.isBlank()) return currentInput
+    val cleanInput = currentInput.trim()
+    if (cleanInput.isBlank()) return cleanPrompt
+    if (cleanInput.contains(cleanPrompt)) return cleanInput
+    return "$cleanInput $cleanPrompt"
+}

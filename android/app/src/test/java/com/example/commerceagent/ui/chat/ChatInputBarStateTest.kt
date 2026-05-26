@@ -28,4 +28,20 @@ class ChatInputBarStateTest {
             chatPromptForSend("", "/static/uploads/photo.jpg")
         )
     }
+
+    @Test
+    fun imageRecognitionPromptFillsOrMergesWithUserInput() {
+        assertEquals(
+            "请帮我找类似黑色缓震跑鞋的商品",
+            mergeImageRecognitionPrompt("", "请帮我找类似黑色缓震跑鞋的商品")
+        )
+        assertEquals(
+            "预算 500 以内 请帮我找类似黑色缓震跑鞋的商品",
+            mergeImageRecognitionPrompt("预算 500 以内", "请帮我找类似黑色缓震跑鞋的商品")
+        )
+        assertEquals(
+            "预算 500 以内",
+            mergeImageRecognitionPrompt("预算 500 以内", "")
+        )
+    }
 }

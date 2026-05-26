@@ -122,6 +122,14 @@ def visual_terms_from_attributes(attributes: VisualAttributes) -> list[str]:
     return terms
 
 
+def build_visual_confirmation_prompt(result: VisionAnalysisResult) -> str:
+    terms = visual_terms_from_attributes(result.attributes)
+    if not result.enabled or not terms:
+        return "请按这张图片找相似商品"
+    compact_terms = terms[:6]
+    return f"请帮我找类似{'、'.join(compact_terms)}的商品"
+
+
 def _build_vision_client() -> OpenAICompatibleClient:
     return OpenAICompatibleClient(
         api_key=os.getenv("DOUBAO_VISION_API_KEY") or os.getenv("DOUBAO_API_KEY") or os.getenv("ARK_API_KEY", ""),

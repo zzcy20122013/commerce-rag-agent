@@ -16,6 +16,11 @@ data class UploadResult(
     val previewUrl: String
 )
 
+data class ImageIntentResult(
+    val prompt: String,
+    val vlmEnabled: Boolean
+)
+
 class UploadApi(
     private val client: OkHttpClient = OkHttpClient()
 ) {
@@ -27,6 +32,17 @@ class UploadApi(
             UploadResult(
                 uploadId = "mock_upload_${System.currentTimeMillis()}",
                 previewUrl = uri.toString()
+            )
+        }
+    }
+
+    suspend fun recognizeImageIntent(uploadId: String): ImageIntentResult = withContext(Dispatchers.IO) {
+        runCatching {
+            recognizeImageIntentFromBackend(uploadId)
+        }.getOrElse {
+            ImageIntentResult(
+                prompt = "请按这张图片找相似商品",
+                vlmEnabled = false
             )
         }
     }
@@ -50,6 +66,21 @@ class UploadApi(
             return UploadResult(
                 uploadId = json.optString("upload_id"),
                 previewUrl = json.optString("preview_url")
+            )
+        }
+    }
+
+    private fun recognizeImageIntentFromBackend(uploadId: String): ImageIntentResult {
+        val request = Request.Builder()
+            .url("${ApiConfig.BASE_URL}/api/upload/image/$uploadId/intent")
+            .post(ByteArray(0).toRequestBody(null))
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("图片识别失败：${response.code}")
+            val json = JSONObject(response.body?.string().orEmpty())
+            return ImageIntentResult(
+                prompt = json.optString("prompt").ifBlank { "请按这张图片找相似商品" },
+                vlmEnabled = json.optBoolean("vlm_enabled", false)
             )
         }
     }

@@ -282,6 +282,7 @@ fun ChatScreen(
                 input = state.input,
                 previewUrl = state.previewUrl,
                 isSending = state.isSending,
+                isRecognizingImage = state.isRecognizingImage,
                 onInput = viewModel::updateInput,
                 onClearImage = viewModel::clearImage,
                 onPickImage = { imagePicker.launch("image/*") },
@@ -298,6 +299,7 @@ fun ChatScreen(
                         voicePermissionLauncher.launch(permission)
                     }
                 },
+                onStopSending = viewModel::stopGenerating,
                 onSend = viewModel::send
             )
         }
@@ -682,12 +684,14 @@ private fun ChatInputBar(
     input: String,
     previewUrl: String?,
     isSending: Boolean,
+    isRecognizingImage: Boolean,
     onInput: (String) -> Unit,
     onClearImage: () -> Unit,
     onPickImage: () -> Unit,
     onTakePhoto: () -> Unit,
     onOpenCart: () -> Unit,
     onVoiceInput: () -> Unit,
+    onStopSending: () -> Unit,
     onSend: () -> Unit
 ) {
     var showTools by remember { mutableStateOf(false) }
@@ -773,7 +777,7 @@ private fun ChatInputBar(
                 TextField(
                     value = input,
                     onValueChange = onInput,
-                    placeholder = { Text("发消息或按住说话...") },
+                    placeholder = { Text(if (isRecognizingImage) "正在识别图片..." else "发消息或按住说话...") },
                     modifier = Modifier.weight(1f),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -793,7 +797,7 @@ private fun ChatInputBar(
 
                 if (isSending) {
                     IconButton(
-                        onClick = { /* TODO: Implement Stop */ },
+                        onClick = onStopSending,
                         colors = IconButtonDefaults.iconButtonColors(
                             containerColor = Color(0xFF5B35EA),
                             contentColor = Color.White

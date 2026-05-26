@@ -2,7 +2,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from app.services.vlm_service import VisionLanguageService
+from app.services.vlm_service import VisualAttributes, VisionAnalysisResult, VisionLanguageService, build_visual_confirmation_prompt
 
 
 class FakeVisionClient:
@@ -59,3 +59,23 @@ def test_vlm_service_falls_back_when_no_client_or_key(tmp_path: Path, monkeypatc
     assert result.enabled is False
     assert result.error == "missing_api_key"
     assert result.attributes.search_terms == []
+
+
+def test_visual_confirmation_prompt_uses_vlm_attributes() -> None:
+    result = VisionAnalysisResult(
+        enabled=True,
+        attributes=VisualAttributes(
+            category="跑鞋",
+            colors=["黑色"],
+            style=["缓震", "运动"],
+            search_terms=["黑色网布跑鞋"],
+        ),
+    )
+
+    assert build_visual_confirmation_prompt(result) == "请帮我找类似跑鞋、黑色、缓震、运动、黑色网布跑鞋的商品"
+
+
+def test_visual_confirmation_prompt_falls_back_when_vlm_unavailable() -> None:
+    result = VisionAnalysisResult(enabled=False, error="missing_api_key")
+
+    assert build_visual_confirmation_prompt(result) == "请按这张图片找相似商品"

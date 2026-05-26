@@ -21,8 +21,9 @@
 - 会话能力：支持会话列表、新建会话、首轮消息自动命名、重命名会话、历史消息加载和真实删除会话。
 - 购物车与订单闭环：支持通过对话或商品卡片加入购物车，支持查看、删除、修改数量、去结算、确认订单、扣减库存、售罄过滤、订单查看、模拟支付、模拟发货、确认收货和退款售后。
 - Android 展示端：可在 Android Studio 模拟器运行，模拟器访问后端使用 `http://10.0.2.2:8000`。
-- Android 体验：支持商品卡片推荐依据展示、系统语音转文字入口、图片上传/拍照找货、购物车查看和商品详情加购。
-- 拍照找货：后端会先调用 VLM 识别图片品类、颜色、材质、风格和用途，再结合图片相似检索、文字约束和 RAG rerank 返回商品卡片；VLM 不可用时自动回退到图片相似检索。
+- Android 体验：支持商品卡片推荐依据展示、系统语音转文字入口、TTS 语音播报、图片上传/拍照找货、购物车查看和商品详情加购。
+- 拍照找货：上传或拍照后，Android 会先请求后端 VLM 识别图片并把“请帮我找类似...”的检索意图填入输入框，用户确认后再发送；后端会结合 VLM 属性、图片相似检索、文字约束和 RAG rerank 返回商品卡片，VLM 不可用时自动回退到相似商品提示和图片相似检索。
+- 聊天控制：AI 回复支持播报、停止播报和复制文本；回复生成中可以点击输入栏停止按钮取消当前流式生成，并保留已生成内容。
 - Android 离线兜底：后端不可用时可使用本地 Mock 数据验证聊天、商品卡片、商品详情、加购和提交订单入口。
 - 反馈闭环：Android 端按 `feedback_enabled` 显示赞踩，后端记录反馈数据。
 - 工程稳定性：支持统一错误响应、运行统计、SSE 断开统计、并发压测脚本和 Android 网络失败重试入口。
@@ -48,12 +49,12 @@ Copy-Item .env.example backend\.env
 DOUBAO_API_KEY=你的 key
 ARK_API_KEY=你的 key
 DOUBAO_MODEL=doubao-seed-2-0-lite-260428
-# 可选：拍照找货 VLM 模型。建议配置为支持图片输入的 Ark endpoint id。
+# 可选：只有文本和视觉分开 endpoint 时才需要填写；否则拍照找货复用 DOUBAO_MODEL。
 DOUBAO_VISION_MODEL=ep-你的视觉模型endpoint
 ```
 
 如果火山方舟控制台要求使用 endpoint id，就把 `DOUBAO_MODEL` 改成控制台里的 `ep-...`。
-如果 `DOUBAO_VISION_MODEL` 为空，拍照找货会尝试复用 `DOUBAO_MODEL`；模型不支持图片时会自动回退到纯图片相似检索。
+默认情况下，拍照找货会复用 `DOUBAO_MODEL`；如果该模型不支持图片输入，会自动回退到相似商品提示和纯图片相似检索。
 
 ## 启动
 
@@ -98,6 +99,7 @@ Android 是正式展示端，用于验证接近移动端产品形态的聊天、
 
 - `POST /api/chat/stream`：聊天 SSE，返回文本、商品卡片、trace、done。
 - `POST /api/upload/image`：上传图片，返回 `upload_id` 和预览地址。
+- `POST /api/upload/image/{upload_id}/intent`：对已上传图片做 VLM 识别，返回可填入输入框、供用户确认后发送的拍照找货意图。
 - `GET /api/sessions`：会话列表。
 - `POST /api/sessions`：创建会话。
 - `GET /api/sessions/{id}/messages`：加载历史消息和商品卡片。

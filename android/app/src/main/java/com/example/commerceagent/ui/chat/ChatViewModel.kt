@@ -14,6 +14,7 @@ import com.example.commerceagent.data.repository.CartRepository
 import com.example.commerceagent.data.repository.ChatRepository
 import com.example.commerceagent.data.repository.FeedbackRepository
 import com.example.commerceagent.data.repository.SessionRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,7 @@ data class ChatUiState(
     val sessionId: String? = null,
     val uploadId: String? = null,
     val previewUrl: String? = null,
+    val isRecognizingImage: Boolean = false,
     val cartItems: List<CartItem> = emptyList(),
     val cartTotal: Int = 0,
     val isCartLoading: Boolean = false,
@@ -44,9 +46,12 @@ class ChatViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
+    private var currentStreamJob: Job? = null
 
     fun setSession(sessionId: String?) {
         if (_state.value.sessionId == sessionId) return
+        currentStreamJob?.cancel()
+        currentStreamJob = null
         val current = _state.value
         _state.value = ChatUiState(
             sessionId = sessionId,
@@ -77,6 +82,8 @@ class ChatViewModel(
     }
 
     fun startNewChat() {
+        currentStreamJob?.cancel()
+        currentStreamJob = null
         val current = _state.value
         _state.value = ChatUiState(
             cartItems = current.cartItems,
@@ -89,7 +96,7 @@ class ChatViewModel(
     }
 
     fun clearImage() {
-        _state.value = _state.value.copy(uploadId = null, previewUrl = null)
+        _state.value = _state.value.copy(uploadId = null, previewUrl = null, isRecognizingImage = false)
     }
 
     fun applyVoiceTranscript(transcript: String) {
@@ -101,8 +108,22 @@ class ChatViewModel(
     fun uploadImage(resolver: ContentResolver, uri: Uri) {
         viewModelScope.launch {
             runCatching { uploadApi.uploadImage(resolver, uri) }
-                .onSuccess { _state.value = _state.value.copy(uploadId = it.uploadId, previewUrl = it.previewUrl, error = null) }
-                .onFailure { _state.value = _state.value.copy(error = it.message) }
+                .onSuccess { upload ->
+                    _state.value = _state.value.copy(
+                        uploadId = upload.uploadId,
+                        previewUrl = upload.previewUrl,
+                        isRecognizingImage = true,
+                        error = null
+                    )
+                    runCatching { uploadApi.recognizeImageIntent(upload.uploadId) }
+                        .onSuccess { intent ->
+                            applyRecognizedImageIntent(upload.uploadId, intent.prompt, clearError = true)
+                        }
+                        .onFailure {
+                            applyRecognizedImageIntent(upload.uploadId, "请按这张图片找相似商品", clearError = false)
+                        }
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message, isRecognizingImage = false) }
         }
     }
 
@@ -223,10 +244,11 @@ class ChatViewModel(
                 ChatMessage(id = assistantTempId, role = MessageRole.Assistant, content = "", isStreaming = true),
             error = null
         )
-        viewModelScope.launch {
+        currentStreamJob = viewModelScope.launch {
             repository.streamChat(text, state.value.sessionId, state.value.uploadId)
                 .catch { error ->
                     failAssistant(assistantTempId, text, error.message ?: "网络异常，请稍后再试。")
+                    currentStreamJob = null
                 }
                 .collect { event ->
                     when (event) {
@@ -238,11 +260,52 @@ class ChatViewModel(
                         is SseEvent.Error -> failAssistant(assistantTempId, text, event.message)
                         SseEvent.Done -> {
                             updateAssistant(assistantTempId) { it.copy(isStreaming = false) }
-                            _state.value = _state.value.copy(isSending = false, uploadId = null, previewUrl = null)
+                            _state.value = _state.value.copy(
+                                isSending = false,
+                                uploadId = null,
+                                previewUrl = null,
+                                isRecognizingImage = false
+                            )
+                            currentStreamJob = null
                         }
                     }
                 }
         }
+    }
+
+    fun stopGenerating() {
+        val job = currentStreamJob ?: return
+        currentStreamJob = null
+        job.cancel()
+        val current = _state.value
+        val stoppedMessages = current.messages.map { message ->
+            if (message.role == MessageRole.Assistant && message.isStreaming) {
+                buildStoppedAssistantMessage(
+                    messageId = message.id,
+                    partialContent = message.content
+                )
+            } else {
+                message
+            }
+        }
+        _state.value = current.copy(
+            messages = stoppedMessages,
+            isSending = false,
+            uploadId = null,
+            previewUrl = null,
+            isRecognizingImage = false,
+            error = null
+        )
+    }
+
+    private fun applyRecognizedImageIntent(uploadId: String, prompt: String, clearError: Boolean) {
+        val current = _state.value
+        if (current.uploadId != uploadId || current.isSending) return
+        _state.value = current.copy(
+            input = mergeImageRecognitionPrompt(current.input, prompt),
+            isRecognizingImage = false,
+            error = if (clearError) null else current.error
+        )
     }
 
     fun retryMessage(prompt: String) {
@@ -323,5 +386,20 @@ fun buildFailedAssistantMessage(messageId: String, prompt: String, errorMessage:
         feedbackEnabled = false,
         networkError = true,
         retryPrompt = prompt
+    )
+}
+
+fun buildStoppedAssistantMessage(messageId: String, partialContent: String): ChatMessage {
+    val stoppedText = "已停止生成。"
+    val content = partialContent.trim().takeIf { it.isNotBlank() }
+        ?.let { "$it\n\n$stoppedText" }
+        ?: stoppedText
+    return ChatMessage(
+        id = messageId,
+        role = MessageRole.Assistant,
+        content = content,
+        isStreaming = false,
+        feedbackEnabled = false,
+        networkError = false
     )
 }
