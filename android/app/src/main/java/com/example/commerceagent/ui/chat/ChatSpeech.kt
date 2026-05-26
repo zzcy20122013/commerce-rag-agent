@@ -8,3 +8,11 @@ fun speakableTextForMessage(message: ChatMessage): String? {
     if (message.isStreaming) return null
     return message.content.trim().takeIf { it.isNotBlank() }
 }
+
+fun hasAssistantInlineActions(message: ChatMessage): Boolean {
+    return speakableTextForMessage(message) != null
+}
+
+fun isMessageSpeechPlaying(message: ChatMessage, speakingMessageId: String?): Boolean {
+    return speakingMessageId == message.id && hasAssistantInlineActions(message)
+}

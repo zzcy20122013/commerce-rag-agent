@@ -6,8 +6,11 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -84,7 +87,9 @@ fun ChatScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
     var ttsReady by remember { mutableStateOf(false) }
+    var speakingMessageId by remember { mutableStateOf<String?>(null) }
     val textToSpeech = remember(context) {
         TextToSpeech(context) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
@@ -93,6 +98,40 @@ fun ChatScreen(
     LaunchedEffect(ttsReady) {
         if (ttsReady) {
             textToSpeech.language = Locale.SIMPLIFIED_CHINESE
+        }
+    }
+    DisposableEffect(textToSpeech) {
+        val listener = object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) = Unit
+
+            override fun onDone(utteranceId: String?) {
+                mainHandler.post {
+                    if (utteranceId == "message_$speakingMessageId") {
+                        speakingMessageId = null
+                    }
+                }
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) {
+                mainHandler.post {
+                    if (utteranceId == "message_$speakingMessageId") {
+                        speakingMessageId = null
+                    }
+                }
+            }
+
+            override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                mainHandler.post {
+                    if (utteranceId == "message_$speakingMessageId") {
+                        speakingMessageId = null
+                    }
+                }
+            }
+        }
+        textToSpeech.setOnUtteranceProgressListener(listener)
+        onDispose {
+            textToSpeech.setOnUtteranceProgressListener(null)
         }
     }
     DisposableEffect(textToSpeech) {
@@ -166,7 +205,15 @@ fun ChatScreen(
             }
             return
         }
-        textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "message_${message.id}")
+        speakingMessageId = message.id
+        val result = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "message_${message.id}")
+        if (result != TextToSpeech.SUCCESS) {
+            speakingMessageId = null
+        }
+    }
+    fun stopSpeakingMessage() {
+        textToSpeech.stop()
+        speakingMessageId = null
     }
     val voicePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -284,7 +331,9 @@ fun ChatScreen(
                             onAddToCart = viewModel::addProductToCart,
                             onFeedback = viewModel::sendFeedback,
                             onRetry = viewModel::retryMessage,
-                            onSpeak = ::speakMessage
+                            onSpeak = ::speakMessage,
+                            onStopSpeech = ::stopSpeakingMessage,
+                            speakingMessageId = speakingMessageId
                         )
                     }
                     item { Spacer(Modifier.height(100.dp)) }

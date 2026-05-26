@@ -6,8 +6,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,7 +39,9 @@ fun MessageBubble(
     onAddToCart: (String) -> Unit,
     onFeedback: (String, Int, String) -> Unit,
     onRetry: (String) -> Unit,
-    onSpeak: (ChatMessage) -> Unit
+    onSpeak: (ChatMessage) -> Unit,
+    onStopSpeech: () -> Unit,
+    speakingMessageId: String?
 ) {
     val isUser = message.role == MessageRole.User
     val clipboardManager = LocalClipboardManager.current
@@ -125,19 +131,41 @@ fun MessageBubble(
                     }
                 }
                 
-                if (!isUser && !message.isStreaming && speakableTextForMessage(message) != null) {
-                    Spacer(Modifier.height(6.dp))
-                    TextButton(
-                        onClick = { onSpeak(message) },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                if (hasAssistantInlineActions(message)) {
+                    val isSpeaking = isMessageSpeechPlaying(message, speakingMessageId)
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = "语音播报",
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text("播报", style = MaterialTheme.typography.labelMedium)
+                        AssistActionIconButton(
+                            onClick = {
+                                if (isSpeaking) {
+                                    onStopSpeech()
+                                } else {
+                                    onSpeak(message)
+                                }
+                            },
+                            contentDescription = if (isSpeaking) "停止播报" else "语音播报"
+                        ) {
+                            Icon(
+                                if (isSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(if (isSpeaking) 15.dp else 16.dp)
+                            )
+                        }
+                        AssistActionIconButton(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(message.content))
+                            },
+                            contentDescription = "复制文本"
+                        ) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
                 }
 
@@ -171,6 +199,31 @@ fun MessageBubble(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AssistActionIconButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    content: @Composable () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(32.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = Color(0xFFF1EEFA),
+            contentColor = Color(0xFF5B35EA)
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .semantics { this.contentDescription = contentDescription },
+            contentAlignment = Alignment.Center
+        ) {
+            content()
         }
     }
 }
