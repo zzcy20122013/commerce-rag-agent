@@ -5,6 +5,7 @@ from app.agents.shopping_guide import product_to_card
 from app.models.tables import Product
 from app.retrieval.image_index import ImageIndex
 from app.retrieval.reranker import rerank_image_candidates
+from app.services.vlm_service import VisionAnalysisResult, VisionLanguageService, visual_terms_from_attributes
 
 
 def run_multimodal_search(
@@ -13,15 +14,22 @@ def run_multimodal_search(
     query: str,
     image_path: str,
     chroma_path: str | None = None,
+    image_index: ImageIndex | None = None,
+    vlm_service: VisionLanguageService | None = None,
 ) -> dict:
     constraints = extract_shopping_constraints(query).model_dump()
-    image_index = ImageIndex(chroma_path=chroma_path)
+    vision_result = (vlm_service or VisionLanguageService()).analyze_image(image_path, query=query)
+    image_index = image_index or ImageIndex(chroma_path=chroma_path)
     image_index.ensure_product_images_indexed(db)
     image_candidates = image_index.search_by_image(image_path, limit=24)
-    visual_terms = infer_visual_terms(image_candidates)
+    visual_terms = _merge_terms(
+        infer_visual_terms(image_candidates),
+        visual_terms_from_attributes(vision_result.attributes),
+    )
+    enriched_query = _build_visual_query(query, vision_result)
     ranked = rerank_image_candidates(
         image_candidates,
-        text_query=query,
+        text_query=enriched_query,
         budget_max=constraints.get("budget_max"),
         category=constraints.get("category"),
         visual_terms=visual_terms,
@@ -31,7 +39,7 @@ def run_multimodal_search(
     if not ranked and constraints.get("budget_max") is not None:
         ranked = rerank_image_candidates(
             image_candidates,
-            text_query=query,
+            text_query=enriched_query,
             budget_max=None,
             category=constraints.get("category"),
             visual_terms=visual_terms,
@@ -40,7 +48,7 @@ def run_multimodal_search(
     if not ranked and visual_terms:
         ranked = rerank_image_candidates(
             image_candidates,
-            text_query=query,
+            text_query=enriched_query,
             budget_max=constraints.get("budget_max"),
             category=constraints.get("category"),
             visual_terms=None,
@@ -55,7 +63,12 @@ def run_multimodal_search(
             continue
         card = product_to_card(product, constraints, len(cards) + 1)
         card["score"] = item["final_score"]
-        card["reasons"] = _multimodal_reasons(product, constraints, relaxed_visual_terms=relaxed_visual_terms)
+        card["reasons"] = _multimodal_reasons(
+            product,
+            constraints,
+            vision_result=vision_result,
+            relaxed_visual_terms=relaxed_visual_terms,
+        )
         cards.append(card)
     return {
         "intent": "multimodal_search",
@@ -67,6 +80,7 @@ def run_multimodal_search(
             cards,
             constraints,
             visual_terms=visual_terms,
+            vision_result=vision_result,
             relaxed_budget=relaxed_budget,
             relaxed_visual_terms=relaxed_visual_terms,
         ),
@@ -74,6 +88,7 @@ def run_multimodal_search(
             {
                 "node": "multimodal_search",
                 "visual_terms": visual_terms,
+                **vision_result.to_trace(),
                 "relaxed_budget": relaxed_budget,
                 "relaxed_visual_terms": relaxed_visual_terms,
                 "image_candidates": [item["metadata"]["product_id"] for item in image_candidates],
@@ -96,11 +111,14 @@ def _multimodal_reasons(
     product: Product,
     constraints: dict,
     *,
+    vision_result: VisionAnalysisResult,
     relaxed_visual_terms: bool = False,
 ) -> list[str]:
     reasons = ["外观相似"]
     if relaxed_visual_terms:
         reasons = ["文本约束匹配"]
+    if vision_result.enabled and vision_result.attributes.category:
+        reasons.append(f"VLM识别：{vision_result.attributes.category}")
     budget = constraints.get("budget_max")
     if budget and product.price <= budget:
         reasons.append("价格符合")
@@ -141,21 +159,48 @@ def build_multimodal_answer(
     constraints: dict,
     *,
     visual_terms: list[str],
+    vision_result: VisionAnalysisResult,
     relaxed_budget: bool,
     relaxed_visual_terms: bool,
 ) -> str:
+    visual_intro = _visual_intro(vision_result, visual_terms)
     if not cards:
-        return "我按图片外观和文字条件检索了商品，但暂时没有找到足够匹配的结果，可以放宽预算或换一张更清晰的图片再试。"
+        return f"{visual_intro}我按图片外观和文字条件检索了商品，但暂时没有找到足够匹配的结果，可以放宽预算或换一张更清晰的图片再试。"
     if relaxed_budget:
         budget = constraints.get("budget_max")
         visual_name = visual_terms[-1] if visual_terms else "相似款"
         return (
-            f"我按图片外观判断更接近{visual_name}，但当前商品库里没有找到 {budget} 元以内的高相似商品。"
+            f"{visual_intro}当前商品库里没有找到 {budget} 元以内的高相似{visual_name}。"
             "下面先给你相似度更高的选择，并在卡片里标出预算情况。"
         )
     if relaxed_visual_terms:
-        return "我按价格和场景约束找到了商品，但图片外观相似度会弱一些，下面结果更偏文字条件匹配。"
-    return "我先按图片外观找相似商品，再结合你的价格和场景约束做了筛选。"
+        return f"{visual_intro}我按价格和场景约束找到了商品，但图片外观相似度会弱一些，下面结果更偏文字条件匹配。"
+    return f"{visual_intro}我再结合你的价格和场景约束做了筛选。"
+
+
+def _merge_terms(*groups: list[str]) -> list[str]:
+    merged: list[str] = []
+    for group in groups:
+        for term in group:
+            clean = str(term).strip()
+            if clean and clean not in merged:
+                merged.append(clean)
+    return merged
+
+
+def _build_visual_query(query: str, vision_result: VisionAnalysisResult) -> str:
+    terms = visual_terms_from_attributes(vision_result.attributes)
+    return " ".join([query, *terms]).strip()
+
+
+def _visual_intro(vision_result: VisionAnalysisResult, visual_terms: list[str]) -> str:
+    if vision_result.enabled and vision_result.attributes.category:
+        details = "、".join(visual_terms[:4])
+        suffix = f"，关键特征有{details}" if details else ""
+        return f"我先识别到这张图大概是{vision_result.attributes.category}{suffix}。"
+    if vision_result.error:
+        return "我先按图片相似度做了检索，VLM 识别暂时不可用。"
+    return "我先按图片外观找相似商品。"
 
 
 def _candidate_text(item: dict) -> str:

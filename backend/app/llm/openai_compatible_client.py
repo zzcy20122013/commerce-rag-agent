@@ -2,6 +2,7 @@ import os
 import json
 from collections.abc import AsyncIterator
 from collections.abc import Iterator
+from typing import Any
 
 import httpx
 
@@ -23,7 +24,7 @@ class OpenAICompatibleClient:
         self.model = model or os.getenv(model_env) or "doubao-seed-2-0-lite-260428"
         self.timeout = timeout or float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 
-    def chat_sync(self, messages: list[dict[str, str]], *, temperature: float = 0.2) -> str:
+    def chat_sync(self, messages: list[dict[str, Any]], *, temperature: float = 0.2) -> str:
         payload = self._payload(messages, temperature=temperature, stream=False)
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(
@@ -37,7 +38,7 @@ class OpenAICompatibleClient:
 
     def stream_chat_sync(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         temperature: float = 0.2,
     ) -> Iterator[str]:
@@ -55,7 +56,7 @@ class OpenAICompatibleClient:
                     if chunk:
                         yield chunk
 
-    async def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.2) -> str:
+    async def chat(self, messages: list[dict[str, Any]], *, temperature: float = 0.2) -> str:
         payload = self._payload(messages, temperature=temperature, stream=False)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
@@ -69,7 +70,7 @@ class OpenAICompatibleClient:
 
     async def stream_chat(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         temperature: float = 0.2,
     ) -> AsyncIterator[str]:
@@ -87,7 +88,7 @@ class OpenAICompatibleClient:
                     if chunk:
                         yield chunk
 
-    def _payload(self, messages: list[dict[str, str]], *, temperature: float, stream: bool) -> dict:
+    def _payload(self, messages: list[dict[str, Any]], *, temperature: float, stream: bool) -> dict:
         return {
             "model": self.model,
             "messages": messages,

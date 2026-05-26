@@ -22,6 +22,7 @@
 - 购物车与订单闭环：支持通过对话或商品卡片加入购物车，支持查看、删除、修改数量、去结算、确认订单、扣减库存、售罄过滤、订单查看、模拟支付、模拟发货、确认收货和退款售后。
 - Android 展示端：可在 Android Studio 模拟器运行，模拟器访问后端使用 `http://10.0.2.2:8000`。
 - Android 体验：支持商品卡片推荐依据展示、系统语音转文字入口、图片上传/拍照找货、购物车查看和商品详情加购。
+- 拍照找货：后端会先调用 VLM 识别图片品类、颜色、材质、风格和用途，再结合图片相似检索、文字约束和 RAG rerank 返回商品卡片；VLM 不可用时自动回退到图片相似检索。
 - Android 离线兜底：后端不可用时可使用本地 Mock 数据验证聊天、商品卡片、商品详情、加购和提交订单入口。
 - 反馈闭环：Android 端按 `feedback_enabled` 显示赞踩，后端记录反馈数据。
 - 工程稳定性：支持统一错误响应、运行统计、SSE 断开统计、并发压测脚本和 Android 网络失败重试入口。
@@ -47,9 +48,12 @@ Copy-Item .env.example backend\.env
 DOUBAO_API_KEY=你的 key
 ARK_API_KEY=你的 key
 DOUBAO_MODEL=doubao-seed-2-0-lite-260428
+# 可选：拍照找货 VLM 模型。建议配置为支持图片输入的 Ark endpoint id。
+DOUBAO_VISION_MODEL=ep-你的视觉模型endpoint
 ```
 
 如果火山方舟控制台要求使用 endpoint id，就把 `DOUBAO_MODEL` 改成控制台里的 `ep-...`。
+如果 `DOUBAO_VISION_MODEL` 为空，拍照找货会尝试复用 `DOUBAO_MODEL`；模型不支持图片时会自动回退到纯图片相似检索。
 
 ## 启动
 

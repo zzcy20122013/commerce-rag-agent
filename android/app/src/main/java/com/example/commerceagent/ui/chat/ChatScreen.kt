@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -53,6 +54,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.example.commerceagent.data.api.ApiConfig
+import com.example.commerceagent.data.model.ChatMessage
 import com.example.commerceagent.data.model.CartItem
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -82,6 +84,23 @@ fun ChatScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    var ttsReady by remember { mutableStateOf(false) }
+    val textToSpeech = remember(context) {
+        TextToSpeech(context) { status ->
+            ttsReady = status == TextToSpeech.SUCCESS
+        }
+    }
+    LaunchedEffect(ttsReady) {
+        if (ttsReady) {
+            textToSpeech.language = Locale.SIMPLIFIED_CHINESE
+        }
+    }
+    DisposableEffect(textToSpeech) {
+        onDispose {
+            textToSpeech.stop()
+            textToSpeech.shutdown()
+        }
+    }
     var showCartSheet by remember { mutableStateOf(false) }
     val cartQuantities = remember(state.cartItems) {
         state.cartItems.associate { it.product.id to it.quantity }
@@ -138,6 +157,16 @@ fun ChatScreen(
                 snackbarHostState.showSnackbar("当前设备没有可用的语音识别服务")
             }
         }
+    }
+    fun speakMessage(message: ChatMessage) {
+        val text = speakableTextForMessage(message) ?: return
+        if (!ttsReady) {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("语音播报还在初始化，请稍后再试")
+            }
+            return
+        }
+        textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "message_${message.id}")
     }
     val voicePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -254,7 +283,8 @@ fun ChatScreen(
                             onOpenProduct = onOpenProduct,
                             onAddToCart = viewModel::addProductToCart,
                             onFeedback = viewModel::sendFeedback,
-                            onRetry = viewModel::retryMessage
+                            onRetry = viewModel::retryMessage,
+                            onSpeak = ::speakMessage
                         )
                     }
                     item { Spacer(Modifier.height(100.dp)) }

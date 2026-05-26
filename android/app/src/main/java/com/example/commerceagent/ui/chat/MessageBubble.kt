@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
@@ -33,7 +34,8 @@ fun MessageBubble(
     onOpenProduct: (String) -> Unit,
     onAddToCart: (String) -> Unit,
     onFeedback: (String, Int, String) -> Unit,
-    onRetry: (String) -> Unit
+    onRetry: (String) -> Unit,
+    onSpeak: (ChatMessage) -> Unit
 ) {
     val isUser = message.role == MessageRole.User
     val clipboardManager = LocalClipboardManager.current
@@ -123,6 +125,22 @@ fun MessageBubble(
                     }
                 }
                 
+                if (!isUser && !message.isStreaming && speakableTextForMessage(message) != null) {
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(
+                        onClick = { onSpeak(message) },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = "语音播报",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("播报", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+
                 if (message.productCards.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     ProductCardRow(
