@@ -56,11 +56,12 @@ fun buildProductReasonUi(reasons: List<String>): ProductReasonUi {
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .distinct()
-    val risk = cleaned.firstOrNull {
+    val riskReason = cleaned.firstOrNull {
         it.startsWith("评价提醒") || it.startsWith("差评提醒") || it.contains("风险")
-    }?.let { formatReasonForUser(it) }
+    }
+    val risk = riskReason?.let { formatReasonForUser(it) }
     val highlights = cleaned
-        .filter { it != risk }
+        .filter { it != riskReason }
         .map { formatReasonForUser(it) }
         .take(4)
     return ProductReasonUi(highlights = highlights, risk = risk)

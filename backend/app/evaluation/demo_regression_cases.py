@@ -164,4 +164,30 @@ DEMO_REGRESSION_CASES: list[dict] = [
         "expected_routed_intent": "product_knowledge",
         "memory": {"last_product_ids": ["p_digital_021"]},
     },
+    {
+        "case_id": "multiturn_006_exclude_previous_brand",
+        "query": "不要刚才那个品牌",
+        "expected_intent": "clarification",
+        "expected_routed_intent": "shopping_guide",
+        "memory": {
+            "category": "服饰运动",
+            "subcategory": "鞋",
+            "budget_max": 300,
+            "use_cases": ["通勤"],
+            "last_product_ids": ["p_shoe_001", "p_shoe_002"],
+        },
+    },
+    {
+        "case_id": "multiturn_007_durability_preference",
+        "query": "如果我更看重耐穿呢",
+        "expected_intent": "shopping_guide",
+        "expected_routed_intent": "shopping_guide",
+        "memory": {
+            "category": "服饰运动",
+            "subcategory": "鞋",
+            "budget_max": 300,
+            "use_cases": ["通勤"],
+            "last_product_ids": ["p_shoe_001", "p_shoe_002"],
+        },
+    },
 ]

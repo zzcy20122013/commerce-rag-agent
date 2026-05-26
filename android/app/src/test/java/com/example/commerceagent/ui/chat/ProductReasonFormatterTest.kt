@@ -18,7 +18,20 @@ class ProductReasonFormatterTest {
         )
 
         assertEquals(listOf("预算内：269 元", "适合通勤", "命中偏好：轻便", "命中偏好：黑色"), ui.highlights)
-        assertEquals("差评提醒：敏感肌/刺痛反馈", ui.risk)
+        assertEquals("评价提醒：敏感肌/刺痛反馈", ui.risk)
+    }
+
+    @Test
+    fun keepsFormattedRiskOutOfHighlights() {
+        val ui = buildProductReasonUi(
+            listOf(
+                "适合通勤",
+                "差评提醒：敏感肌/刺痛反馈"
+            )
+        )
+
+        assertEquals(listOf("适合通勤"), ui.highlights)
+        assertEquals("评价提醒：敏感肌/刺痛反馈", ui.risk)
     }
 
     @Test
@@ -44,7 +57,7 @@ class ProductReasonFormatterTest {
 
         assertEquals("推荐依据：价格/销量/评分、用户评价、商品规格", ui.title)
         assertEquals(listOf("价格/销量/评分", "用户评价", "商品规格"), ui.sources)
-        assertEquals("价格 269 元，库存充足", ui.highlight)
+        assertEquals("通勤脚感反馈较多", ui.highlight)
     }
 
     @Test

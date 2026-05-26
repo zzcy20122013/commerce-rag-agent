@@ -24,6 +24,19 @@ MEMORY_FIELDS = [
     "exclusions",
 ]
 
+TRACE_MEMORY_FIELDS = [
+    "category",
+    "subcategory",
+    "budget_max",
+    "audience",
+    "use_cases",
+    "preferences",
+    "strict_filter",
+    "last_product_ids",
+    "exclude_product_ids",
+    "exclusions",
+]
+
 DOMESTIC_BRANDS = {
     "安踏",
     "李宁",
@@ -46,6 +59,7 @@ def shopping_guide_node(db: Session):
         constraints = extract_shopping_constraints(query).model_dump()
         memory = merge_memory(state.get("memory", {}), constraints, query)
         effective_constraints = build_effective_constraints(constraints, memory)
+        trace_context = build_shopping_trace_context(effective_constraints, memory)
         products = filter_products(
             db,
             category=memory.get("category"),
@@ -61,6 +75,7 @@ def shopping_guide_node(db: Session):
                 "cards": [],
                 "llm_enabled": False,
                 "retrieval_mode": "all_excluded_by_negative_constraints",
+                **trace_context,
                 **exclusion_trace,
             }
             return {
@@ -83,6 +98,7 @@ def shopping_guide_node(db: Session):
                 "retrieval_mode": "sqlite_filter_no_new_alternatives",
                 "sqlite_candidates": len(products),
                 "excluded_product_ids": memory.get("exclude_product_ids", []),
+                **trace_context,
             }
             return {
                 **state,
@@ -106,6 +122,7 @@ def shopping_guide_node(db: Session):
                 "sqlite_candidates": 0,
                 "chroma_hits": [],
                 "fallback_reason": "strict_filter_no_match",
+                **trace_context,
             }
             return {
                 **state,
@@ -143,6 +160,7 @@ def shopping_guide_node(db: Session):
             "node": "shopping_guide",
             "cards": [card["product_id"] for card in cards],
             "llm_enabled": generation.llm_enabled,
+            **trace_context,
             **exclusion_trace,
             **retrieval_trace,
         }
@@ -190,6 +208,8 @@ def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
         _append_preference(memory, "修护维稳")
     if any(word in lowered for word in ["保湿", "补水"]):
         _append_preference(memory, "保湿")
+    if any(word in lowered for word in ["耐穿", "耐用", "耐磨", "结实"]):
+        _append_preference(memory, "耐穿")
     for color, aliases in COLOR_PREFERENCE_ALIASES.items():
         if any(alias in lowered for alias in aliases):
             _append_preference(memory, color)
@@ -216,6 +236,23 @@ def build_effective_constraints(constraints: dict, memory: dict) -> dict:
         if memory.get(field):
             effective[field] = memory[field]
     return effective
+
+
+def build_shopping_trace_context(effective_constraints: dict, memory: dict) -> dict:
+    return {
+        "effective_constraints": compact_trace_dict(effective_constraints),
+        "memory_snapshot": compact_trace_dict(memory),
+    }
+
+
+def compact_trace_dict(values: dict) -> dict:
+    compact: dict = {}
+    for field in TRACE_MEMORY_FIELDS:
+        value = values.get(field)
+        if value in (None, "", [], {}, False):
+            continue
+        compact[field] = value
+    return compact
 
 
 def apply_exclusion_filters(products: list[Product], memory: dict) -> tuple[list[Product], dict]:

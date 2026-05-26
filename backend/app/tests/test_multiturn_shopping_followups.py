@@ -17,7 +17,15 @@ def test_other_brand_question_is_a_multiturn_followup() -> None:
 
 
 def test_common_followup_phrases_keep_shopping_context() -> None:
-    for query in ["换个牌子看看", "有没有国产的", "还有便宜点的吗", "300 真不能超", "别给我这个牌子"]:
+    for query in [
+        "换个牌子看看",
+        "有没有国产的",
+        "还有便宜点的吗",
+        "300 真不能超",
+        "别给我这个牌子",
+        "不要刚才那个品牌",
+        "如果我更看重耐穿呢",
+    ]:
         result = classify_intent(query)
 
         assert result.intent in {"clarification", "shopping_guide"}
@@ -144,6 +152,68 @@ def test_domestic_brand_followup_prefers_domestic_products() -> None:
     )
 
     assert "国产品牌" in memory["preferences"]
+
+
+def test_durability_followup_adds_preference_without_losing_context() -> None:
+    memory = merge_memory(
+        {
+            "category": "服饰运动",
+            "subcategory": "鞋",
+            "budget_max": 300,
+            "use_cases": ["通勤"],
+        },
+        {},
+        "如果我更看重耐穿呢",
+    )
+
+    assert memory["category"] == "服饰运动"
+    assert memory["subcategory"] == "鞋"
+    assert memory["budget_max"] == 300
+    assert memory["use_cases"] == ["通勤"]
+    assert "耐穿" in memory["preferences"]
+
+
+def test_shopping_trace_exposes_effective_constraints_and_memory_snapshot(monkeypatch) -> None:
+    def fake_retrieve(db, candidates, memory, query):
+        return candidates, {"retrieval_mode": "fake", "sqlite_candidates": len(candidates), "chroma_hits": []}
+
+    monkeypatch.setattr("app.agents.shopping_guide.hybrid_retrieve_and_rerank", fake_retrieve)
+
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    db = TestingSession()
+    try:
+        db.add_all(
+            [
+                _shoe("p_shoe_001", "Nike Air Zoom Pegasus 41 男子通勤跑鞋", "Nike", 899),
+                _shoe("p_shoe_002", "安踏轻便耐穿通勤跑鞋", "安踏", 269),
+            ]
+        )
+        db.commit()
+
+        result = shopping_guide_node(db)(
+            {
+                "query": "如果我更看重耐穿呢",
+                "memory": {
+                    "category": "服饰运动",
+                    "subcategory": "鞋",
+                    "budget_max": 300,
+                    "use_cases": ["通勤"],
+                    "last_product_ids": ["p_shoe_001"],
+                },
+                "trace": [],
+            }
+        )
+
+        trace = result["trace"][-1]
+        assert trace["effective_constraints"]["budget_max"] == 300
+        assert trace["effective_constraints"]["subcategory"] == "鞋"
+        assert trace["memory_snapshot"]["use_cases"] == ["通勤"]
+        assert "耐穿" in trace["memory_snapshot"]["preferences"]
+        assert trace["memory_snapshot"]["last_product_ids"] == ["p_shoe_001"]
+    finally:
+        db.close()
 
 
 def test_domestic_brand_preference_ranks_domestic_product_first() -> None:

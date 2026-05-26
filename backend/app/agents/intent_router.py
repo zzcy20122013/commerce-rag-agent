@@ -98,6 +98,8 @@ SHOPPING_GUIDE_KEYWORDS = [
     "轻一点",
     "便宜",
     "换个",
+    "耐穿",
+    "耐用",
     "找一款",
     "想买",
     "recommend",
@@ -149,7 +151,24 @@ def classify_intent(text: str) -> IntentResult:
 
     if _contains_any(
         normalized,
-        ["这两个", "这个", "有没有", "换一个", "更轻", "便宜点", "不能超", "别超", "不超", "不要超", "卡死"],
+        [
+            "这两个",
+            "这个",
+            "有没有",
+            "换一个",
+            "更轻",
+            "便宜点",
+            "更看重",
+            "耐穿",
+            "耐用",
+            "不要刚才",
+            "刚才那个品牌",
+            "不能超",
+            "别超",
+            "不超",
+            "不要超",
+            "卡死",
+        ],
     ):
         return IntentResult(intent="clarification", confidence=0.55, constraints=constraints)
 
