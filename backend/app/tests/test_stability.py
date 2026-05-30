@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.services.error_handlers import install_error_handlers
 from app.services.runtime_stats import RuntimeStats, install_runtime_stats
+from app.utils.concurrency import BodySizeLimitMiddleware
 
 
 def test_http_errors_use_unified_error_payload() -> None:
@@ -81,3 +82,17 @@ def test_sse_disconnect_stats_are_recorded() -> None:
     assert snapshot["sse_open_total"] == 1
     assert snapshot["sse_disconnect_total"] == 1
     assert snapshot["sse_active"] == 0
+
+
+def test_body_size_limit_rejects_large_requests() -> None:
+    app = FastAPI()
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=4)
+
+    @app.post("/upload")
+    async def upload() -> dict:
+        return {"ok": True}
+
+    response = TestClient(app).post("/upload", content=b"12345")
+
+    assert response.status_code == 413
+    assert response.json()["success"] is False

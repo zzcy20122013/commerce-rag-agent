@@ -54,6 +54,11 @@ backend/models/
 # Frontend build cache
 web-debug/tsconfig.tsbuildinfo
 
+# Local design/prototype exports
+figma-prototype-plugin/
+prototype-export/
+prototype/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

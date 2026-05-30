@@ -17,6 +17,7 @@ from app.api.upload import router as upload_router
 from app.services.error_handlers import install_error_handlers
 from app.services.image_service import DATA_DIR, ensure_image_dirs
 from app.services.runtime_stats import install_runtime_stats
+from app.utils.concurrency import BodySizeLimitMiddleware, ConcurrencyLimitMiddleware
 
 
 def create_app() -> FastAPI:
@@ -25,6 +26,8 @@ def create_app() -> FastAPI:
     ensure_image_dirs()
     install_runtime_stats(api)
     install_error_handlers(api)
+    api.add_middleware(BodySizeLimitMiddleware)
+    api.add_middleware(ConcurrencyLimitMiddleware)
     api.mount("/static", StaticFiles(directory=DATA_DIR), name="static")
     api.add_middleware(
         CORSMiddleware,
