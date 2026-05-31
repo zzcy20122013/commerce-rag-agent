@@ -1,0 +1,39 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: sqlite:///./app/data/commerce.db
+      CHROMA_PATH: ./app/data/chroma
+      HF_HOME: /models/huggingface
+      BGE_M3_ENABLE_REAL: "false"
+      CHINESE_CLIP_ENABLE_REAL: "false"
+      CHINESE_CLIP_LOCAL_FILES_ONLY: "false"
+      HF_HUB_OFFLINE: "0"
+      TRANSFORMERS_OFFLINE: "0"
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend-data:/app/app/data
+      - model-cache:/models
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  web-debug:
+    build:
+      context: ./web-debug
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+
+volumes:
+  backend-data:
+  model-cache:
