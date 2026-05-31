@@ -2,6 +2,7 @@ import json
 
 from sqlalchemy.orm import Session
 
+from app.agents.guide_quality import evaluate_guide_quality
 from app.agents.intent_router import extract_shopping_constraints
 from app.llm.generation import generate_shopping_result
 from app.models.tables import Product
@@ -9,6 +10,7 @@ from app.retrieval.text_index import TextIndex
 from app.services.constraint_parser import product_is_excluded
 from app.services.keyword_retrieval_service import KeywordRetrievalService
 from app.services.product_service import filter_products
+from app.services.review_insight_service import build_review_insight, format_positive_review_evidence
 
 
 MEMORY_FIELDS = [
@@ -148,6 +150,12 @@ def shopping_guide_node(db: Session):
         visible_limit = 2 if no_exact_match else 3
         visible_products = products[:visible_limit]
         cards = [product_to_card(product, memory, rank) for rank, product in enumerate(visible_products, start=1)]
+        guide_quality = evaluate_guide_quality(
+            memory=memory,
+            cards=cards,
+            retrieval_trace=retrieval_trace,
+            query=query,
+        )
         fallback_answer = build_recommendation_answer(
             cards,
             memory,
@@ -169,6 +177,7 @@ def shopping_guide_node(db: Session):
             **trace_context,
             **exclusion_trace,
             **retrieval_trace,
+            "guide_quality": guide_quality,
         }
         if no_exact_match:
             trace_item["fallback_reason"] = "no_exact_subcategory_budget_match"
@@ -472,6 +481,7 @@ def _is_low_confidence(semantic_scores: dict[str, float], keyword_scores: dict[s
 
 def product_to_card(product: Product, memory: dict, rank: int) -> dict:
     reasons = []
+    review_insight = build_review_insight(product, memory)
     if memory.get("budget_max") and product.price <= memory["budget_max"]:
         reasons.append(f"预算内：{product.price}<={memory['budget_max']}")
     elif memory.get("budget_max") and product.price > memory["budget_max"]:
@@ -508,6 +518,7 @@ def product_to_card(product: Product, memory: dict, rank: int) -> dict:
         "stock_status": "in_stock" if product.stock > 0 else "out_of_stock",
         "reasons": list(dict.fromkeys(reasons))[:6],
         "evidence": build_card_evidence(product, memory, reasons),
+        "review_insight": review_insight,
         "source_summary": build_source_summary(product, reasons),
         "score": round(max(0.5, 0.95 - rank * 0.04), 2),
     }
@@ -616,6 +627,7 @@ def _extract_reason_budget(reason: str) -> int | None:
 
 
 def build_card_evidence(product: Product, memory: dict, reasons: list[str]) -> list[dict]:
+    review_insight = build_review_insight(product, memory)
     evidence = [
         {
             "source": "价格/销量/评分",
@@ -631,6 +643,9 @@ def build_card_evidence(product: Product, memory: dict, reasons: list[str]) -> l
     ]
     if matched_preferences:
         evidence.append({"source": "商品描述/规格", "detail": f"命中偏好：{'、'.join(matched_preferences[:3])}"})
+    positive_review_text = format_positive_review_evidence(review_insight)
+    if positive_review_text:
+        evidence.append({"source": "用户评价正向", "detail": positive_review_text})
     risk = format_review_risk_reason(product)
     if risk:
         evidence.append({"source": "用户评价", "detail": risk})

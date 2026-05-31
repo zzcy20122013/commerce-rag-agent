@@ -30,3 +30,8 @@ def rule_section(*keys: str) -> Any:
 def rule_list(*keys: str) -> list[Any]:
     value = rule_section(*keys)
     return value if isinstance(value, list) else []
+
+
+def rule_dict(*keys: str) -> dict[str, Any]:
+    value = rule_section(*keys)
+    return value if isinstance(value, dict) else {}
