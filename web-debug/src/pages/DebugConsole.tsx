@@ -16,15 +16,27 @@ import { uploadImage } from "../api/upload";
 import type { DebugEvent, UploadResult } from "../api/types";
 import { ChatMessage, type UiMessage } from "../components/ChatMessage";
 
-const examples = [
-  "帮我推荐 3500 以内适合学生记笔记和网课的平板",
-  "帮我推荐 2000 以内适合上网课和通勤的降噪耳机",
-  "帮我推荐 300 以内适合通勤的鞋",
-  "帮我找 100 元以内控油定妆的粉饼或散粉",
-  "50 元以内有什么低糖或无糖饮品？",
-  "退货政策是什么？",
-  "兰蔻小黑瓶和资生堂红腰子，哪个更适合敏感肌修护维稳？",
-];
+const examples = parseConfiguredExamples(import.meta.env.VITE_DEBUG_EXAMPLES);
+
+function parseConfiguredExamples(raw: unknown) {
+  if (typeof raw !== "string" || !raw.trim()) {
+    return [
+      "帮我推荐 3500 以内适合学生记笔记和网课的平板",
+      "帮我推荐 2000 以内适合上网课和通勤的降噪耳机",
+      "帮我推荐 300 以内适合通勤的鞋",
+      "帮我找 100 元以内控油定妆的粉饼或散粉",
+      "50 元以内有什么低糖或无糖饮品？",
+      "退货政策是什么？",
+      "兰蔻小黑瓶和资生堂红腰子，哪个更适合敏感肌修护维稳？",
+    ];
+  }
+
+  return raw
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
 
 export function DebugConsole() {
   const [message, setMessage] = useState("");
@@ -295,6 +307,10 @@ export function DebugConsole() {
       </section>
 
       <aside className="trace-panel">
+        <div className="trace-block trace-summary-block">
+          <h3>Agentic RAG Summary</h3>
+          <TraceSummary trace={trace} memory={memory} />
+        </div>
         <div className="trace-block">
           <h3>Trace</h3>
           <pre>{JSON.stringify(trace, null, 2)}</pre>
@@ -306,4 +322,76 @@ export function DebugConsole() {
       </aside>
     </main>
   );
+}
+
+function TraceSummary({ trace, memory }: { trace: unknown; memory: Record<string, unknown> }) {
+  const items = Array.isArray(trace) ? (trace as Array<Record<string, unknown>>) : [];
+  const supervisor = items.find((item) => item.node === "supervisor");
+  const shopping = [...items].reverse().find((item) => item.node === "shopping_guide");
+  const intent = items.find((item) => item.node === "intent_router");
+  const plan = asRecord(supervisor?.agentic_rag_plan);
+  const constraints = asRecord(shopping?.effective_constraints);
+  const memorySnapshot = asRecord(shopping?.memory_snapshot) || memory;
+  const lowConfidence = Boolean(shopping?.low_confidence);
+
+  if (!items.length) {
+    return <div className="trace-empty">等待请求后展示意图、专家 Agent、检索策略和约束记忆。</div>;
+  }
+
+  return (
+    <div className="trace-summary">
+      <div className="trace-kpi-grid">
+        <TraceKpi label="Intent" value={stringValue(intent?.intent || supervisor?.intent)} />
+        <TraceKpi label="Specialist" value={stringValue(supervisor?.specialist)} />
+        <TraceKpi label="Retrieval" value={stringValue(plan?.retrieval_strategy || shopping?.retrieval_mode)} />
+        <TraceKpi label="Confidence" value={lowConfidence ? "Low" : stringValue(shopping?.confidence, "Normal")} tone={lowConfidence ? "warn" : "ok"} />
+      </div>
+      <TraceChips title="Constraints" values={compactRecord(constraints)} />
+      <TraceChips title="Memory" values={compactRecord(memorySnapshot)} />
+      <TraceChips title="Sources" values={compactList(shopping?.cards || shopping?.keyword_hits || shopping?.chroma_hits)} />
+      {lowConfidence && <div className="trace-warning">召回置信度偏低，演示时可以说明系统已触发保守推荐提示。</div>}
+    </div>
+  );
+}
+
+function TraceKpi({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "ok" | "warn" }) {
+  return (
+    <div className={`trace-kpi ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function TraceChips({ title, values }: { title: string; values: string[] }) {
+  return (
+    <div className="trace-chip-section">
+      <span className="trace-chip-title">{title}</span>
+      <div className="trace-chips">
+        {values.length ? values.map((value) => <code key={value}>{value}</code>) : <em>暂无</em>}
+      </div>
+    </div>
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function compactRecord(record: Record<string, unknown> | null): string[] {
+  if (!record) return [];
+  return Object.entries(record)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0))
+    .slice(0, 8)
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`);
+}
+
+function compactList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 6).map((item) => String(item));
+}
+
+function stringValue(value: unknown, fallback = "暂无"): string {
+  if (value === undefined || value === null || value === "") return fallback;
+  return String(value);
 }

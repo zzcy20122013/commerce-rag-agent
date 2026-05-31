@@ -11,6 +11,7 @@ from app.agents.product_knowledge import product_knowledge_node
 from app.agents.purchase import purchase_help_node
 from app.agents.shopping_guide import shopping_guide_node
 from app.agents.state import AgentState
+from app.agents.supervisor import build_supervisor_trace
 
 
 MORE_OPTIONS_FOLLOWUP_WORDS = [
@@ -46,11 +47,18 @@ def router_node(state: AgentState) -> AgentState:
         intent = "shopping_guide"
     elif intent == "clarification" and len(memory.get("last_product_ids", [])) >= 2 and _contains_any(query, COMPARE_FOLLOWUP_WORDS):
         intent = "compare"
+    supervisor_trace = build_supervisor_trace(
+        query=state["query"],
+        intent=intent,
+        memory=memory,
+        has_image=bool(state.get("image_path")),
+    )
     return {
         **state,
         "intent": intent,
         "constraints": result.constraints.model_dump(),
         "trace": state.get("trace", []) + [
+            supervisor_trace,
             {"node": "intent_router", "intent": intent, "confidence": result.confidence}
         ],
     }

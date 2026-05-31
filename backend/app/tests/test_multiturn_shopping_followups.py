@@ -55,6 +55,22 @@ def test_recommendation_answer_hides_internal_reason_expressions() -> None:
     assert "适合记笔记" in answer
 
 
+def test_low_confidence_recommendation_answer_is_honest_about_match_quality() -> None:
+    answer = build_recommendation_answer(
+        [
+            {
+                "title": "星云主动降噪耳机 通勤长续航",
+                "price": 699,
+                "reasons": ["评分较高：4.8"],
+            }
+        ],
+        {},
+        low_confidence=True,
+    )
+
+    assert "匹配度不是特别高" in answer
+
+
 def test_other_brand_followup_excludes_last_recommendations() -> None:
     memory = merge_memory(
         {

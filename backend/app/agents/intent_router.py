@@ -1,6 +1,7 @@
 import re
 
 from app.llm.schemas import IntentResult, ShoppingConstraints
+from app.services.business_rules import rule_list
 from app.services.taxonomy import extract_taxonomy_constraints
 
 
@@ -130,7 +131,7 @@ def classify_intent(text: str) -> IntentResult:
     if _contains_any(normalized, ORDER_ACTION_KEYWORDS):
         return IntentResult(intent="order_query", confidence=0.9, constraints=constraints)
 
-    if _contains_any(normalized, PURCHASE_KEYWORDS):
+    if _contains_any(normalized, PURCHASE_KEYWORDS) or _contains_configured_purchase_phrase(normalized):
         return IntentResult(intent="purchase_help", confidence=0.9, constraints=constraints)
 
     if _contains_any(normalized, COMPARE_KEYWORDS):
@@ -223,6 +224,13 @@ def _extract_audience(text: str) -> str | None:
 
 def _contains_any(text: str, keywords: list[str]) -> bool:
     return any(keyword in text for keyword in keywords)
+
+
+def _contains_configured_purchase_phrase(text: str) -> bool:
+    for action in ["add_to_cart", "view_cart", "remove_from_cart", "update_cart_quantity", "checkout"]:
+        if _contains_any(text, [str(item).lower() for item in rule_list("nlu", "commands", action, "contains")]):
+            return True
+    return False
 
 
 def _is_faq_request(text: str) -> bool:

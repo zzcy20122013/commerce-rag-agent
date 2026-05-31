@@ -7,6 +7,7 @@ from app.llm.generation import generate_shopping_result
 from app.models.tables import Product
 from app.retrieval.text_index import TextIndex
 from app.services.constraint_parser import product_is_excluded
+from app.services.keyword_retrieval_service import KeywordRetrievalService
 from app.services.product_service import filter_products
 
 
@@ -147,7 +148,12 @@ def shopping_guide_node(db: Session):
         visible_limit = 2 if no_exact_match else 3
         visible_products = products[:visible_limit]
         cards = [product_to_card(product, memory, rank) for rank, product in enumerate(visible_products, start=1)]
-        fallback_answer = build_recommendation_answer(cards, memory, no_exact_match=no_exact_match)
+        fallback_answer = build_recommendation_answer(
+            cards,
+            memory,
+            no_exact_match=no_exact_match,
+            low_confidence=bool(retrieval_trace.get("low_confidence")),
+        )
         generation_memory = build_generation_memory(memory, cards, no_exact_match=no_exact_match)
         generation = generate_shopping_result(
             query=query,
@@ -316,6 +322,14 @@ def hybrid_retrieve_and_rerank(
 
     candidate_by_id = {product.id: product for product in candidates}
     query_text = build_retrieval_query(query, memory)
+    keyword_hits = KeywordRetrievalService().search(
+        db,
+        query_text,
+        memory=memory,
+        candidates=candidates,
+        limit=max(len(candidates), 20),
+    )
+    keyword_scores = {str(hit["product_id"]): float(hit["score"]) for hit in keyword_hits}
     try:
         index = TextIndex()
         index.ensure_products_indexed(db)
@@ -325,10 +339,16 @@ def hybrid_retrieve_and_rerank(
             product_ids=list(candidate_by_id),
         )
     except Exception as error:
-        return sort_products_for_memory(candidates, memory, query), {
-            "retrieval_mode": "sqlite_filter_local_rerank",
+        ranked = _rank_with_scores(candidates, memory, query, {}, keyword_scores)
+        return ranked, {
+            "retrieval_mode": "sqlite_filter_keyword_rerank",
             "sqlite_candidates": len(candidates),
             "chroma_hits": [],
+            "keyword_hits": _keyword_hit_ids(keyword_hits),
+            "keyword_top_terms": _keyword_top_terms(keyword_hits),
+            "confidence": _retrieval_confidence({}, keyword_scores),
+            "low_confidence": _is_low_confidence({}, keyword_scores),
+            "scoring": "bm25_rules",
             "chroma_error": f"{type(error).__name__}: {str(error)[:160]}",
         }
 
@@ -337,19 +357,16 @@ def hybrid_retrieve_and_rerank(
         for hit in hits
         if hit.get("metadata", {}).get("product_id") in candidate_by_id
     }
-    ranked = sorted(
-        candidates,
-        key=lambda product: (
-            -_hybrid_score(product, memory, query, semantic_scores),
-            product.price if "性价比" in set(memory.get("preferences", [])) else 0,
-            -product.rating,
-            -product.sales,
-        ),
-    )
+    ranked = _rank_with_scores(candidates, memory, query, semantic_scores, keyword_scores)
     return ranked, {
         "retrieval_mode": "sqlite_filter_chroma_rerank",
         "sqlite_candidates": len(candidates),
         "chroma_hits": [hit["metadata"]["product_id"] for hit in hits[:5] if hit.get("metadata")],
+        "keyword_hits": _keyword_hit_ids(keyword_hits),
+        "keyword_top_terms": _keyword_top_terms(keyword_hits),
+        "confidence": _retrieval_confidence(semantic_scores, keyword_scores),
+        "low_confidence": _is_low_confidence(semantic_scores, keyword_scores),
+        "scoring": "bm25_semantic_rules",
     }
 
 
@@ -401,10 +418,56 @@ def _semantic_score(distance: float | None) -> float:
     return 1.0 / (1.0 + max(float(distance), 0.0))
 
 
-def _hybrid_score(product: Product, memory: dict, query: str, semantic_scores: dict[str, float]) -> float:
+def _rank_with_scores(
+    products: list[Product],
+    memory: dict,
+    query: str,
+    semantic_scores: dict[str, float],
+    keyword_scores: dict[str, float],
+) -> list[Product]:
+    return sorted(
+        products,
+        key=lambda product: (
+            -_hybrid_score(product, memory, query, semantic_scores, keyword_scores),
+            product.price if "性价比" in set(memory.get("preferences", [])) else 0,
+            -product.rating,
+            -product.sales,
+        ),
+    )
+
+
+def _hybrid_score(
+    product: Product,
+    memory: dict,
+    query: str,
+    semantic_scores: dict[str, float],
+    keyword_scores: dict[str, float] | None = None,
+) -> float:
     semantic = semantic_scores.get(product.id, 0.0)
+    keyword = (keyword_scores or {}).get(product.id, 0.0)
     local = _score_product(product, memory, query)
-    return semantic * 20 + local
+    return semantic * 20 + keyword + local
+
+
+def _keyword_hit_ids(keyword_hits: list[dict]) -> list[str]:
+    return [str(hit["product_id"]) for hit in keyword_hits[:5] if hit.get("product_id")]
+
+
+def _keyword_top_terms(keyword_hits: list[dict]) -> list[str]:
+    terms: list[str] = []
+    for hit in keyword_hits[:5]:
+        terms.extend(str(term) for term in hit.get("matched_terms", []) if term)
+    return list(dict.fromkeys(terms))[:8]
+
+
+def _retrieval_confidence(semantic_scores: dict[str, float], keyword_scores: dict[str, float]) -> float:
+    best_semantic = max(semantic_scores.values(), default=0.0)
+    best_keyword = min(max(keyword_scores.values(), default=0.0) / 20.0, 1.0)
+    return round(max(best_semantic, best_keyword), 2)
+
+
+def _is_low_confidence(semantic_scores: dict[str, float], keyword_scores: dict[str, float]) -> bool:
+    return _retrieval_confidence(semantic_scores, keyword_scores) < 0.2
 
 
 def product_to_card(product: Product, memory: dict, rank: int) -> dict:
@@ -456,6 +519,7 @@ def build_recommendation_answer(
     *,
     no_exact_match: bool = False,
     strict_no_match: bool = False,
+    low_confidence: bool = False,
 ) -> str:
     if not cards:
         if strict_no_match:
@@ -483,12 +547,14 @@ def build_recommendation_answer(
             f"{gap_text}"
             "下面这些只能算同类里的加预算备选；如果预算不能提高，我更建议你放宽品牌、屏幕尺寸，或者等活动价/看二手。"
         )
+    low_confidence_intro = "这次匹配度不是特别高，我先按现有商品里相对接近的结果给你保守推荐。" if low_confidence else ""
     top_card = cards[0]
     top_reason_text = format_card_reasons(top_card)
     if len(cards) == 1:
         reason_sentence = f"它比较合适的点是{top_reason_text}。" if top_reason_text else ""
         return (
             f"{exclusion_intro}"
+            f"{low_confidence_intro}"
             f"您可以优先看 {top_card['title']}，价格 {top_card['price']} 元。"
             f"{reason_sentence}"
             "如果您还想更稳一点，可以再告诉我品牌偏好或不能接受的点，我继续帮您缩小范围。"
@@ -499,6 +565,7 @@ def build_recommendation_answer(
     second_reason_sentence = f"，它的优势是{second_reason_text}" if second_reason_text else ""
     return (
         f"{exclusion_intro}"
+        f"{low_confidence_intro}"
         f"您可以优先看 {top_card['title']}，价格 {top_card['price']} 元{top_reason_sentence}。"
         f"如果您想留个备选，可以再看看 {second_card['title']}，它是 {second_card['price']} 元{second_reason_sentence}。"
         "建议您先按预算和最常用的场景来选，不用只盯参数。"

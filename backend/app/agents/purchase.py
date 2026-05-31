@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.agents.intent_router import extract_shopping_constraints
 from app.agents.shopping_guide import product_to_card
 from app.models.tables import Product
+from app.services.business_rules import rule_list
 from app.services.cart_service import (
     add_cart_item,
     clear_cart_items,
@@ -104,6 +105,16 @@ def purchase_help_node(db: Session):
 
 def parse_cart_action(query: str) -> str:
     text = query.lower()
+    if contains_configured_action(text, "view_cart"):
+        return "view"
+    if contains_configured_action(text, "checkout"):
+        return "checkout"
+    if contains_configured_action(text, "remove_from_cart"):
+        return "remove"
+    if contains_configured_action(text, "update_cart_quantity"):
+        return "update"
+    if contains_configured_action(text, "add_to_cart"):
+        return "add"
     if is_clear_cart_request(text):
         return "clear"
     if is_checkout_guidance_request(text):
@@ -115,6 +126,11 @@ def parse_cart_action(query: str) -> str:
     if is_view_cart_request(text):
         return "view"
     return "add"
+
+
+def contains_configured_action(text: str, action: str) -> bool:
+    phrases = [str(item).lower() for item in rule_list("nlu", "commands", action, "contains") if str(item).strip()]
+    return any(phrase in text for phrase in phrases)
 
 
 def is_clear_cart_request(text: str) -> bool:
