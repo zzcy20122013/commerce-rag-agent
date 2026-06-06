@@ -517,7 +517,7 @@ def product_to_card(product: Product, memory: dict, rank: int) -> dict:
         "sales": product.sales,
         "stock_status": "in_stock" if product.stock > 0 else "out_of_stock",
         "reasons": list(dict.fromkeys(reasons))[:6],
-        "evidence": build_card_evidence(product, memory, reasons),
+        "evidence": build_card_evidence(product, memory, reasons, review_insight=review_insight),
         "review_insight": review_insight,
         "source_summary": build_source_summary(product, reasons),
         "score": round(max(0.5, 0.95 - rank * 0.04), 2),
@@ -626,8 +626,14 @@ def _extract_reason_budget(reason: str) -> int | None:
     return None
 
 
-def build_card_evidence(product: Product, memory: dict, reasons: list[str]) -> list[dict]:
-    review_insight = build_review_insight(product, memory)
+def build_card_evidence(
+    product: Product,
+    memory: dict,
+    reasons: list[str],
+    *,
+    review_insight: dict | None = None,
+) -> list[dict]:
+    review_insight = review_insight if review_insight is not None else build_review_insight(product, memory)
     evidence = [
         {
             "source": "价格/销量/评分",
