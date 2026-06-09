@@ -102,6 +102,9 @@ def product_is_excluded(
 def _clean_value(value: str) -> str:
     cleaned = (value or "").strip()
     cleaned = cleaned.strip(" ，,。.!！；;、")
+    normalized = cleaned.replace("屏幕", "屏")
+    if normalized in {"太大屏", "过大屏", "太大的屏", "大屏幕", "太大屏幕", "过大屏幕"}:
+        return "大屏"
     for prefix in ["也", "都", "再"]:
         if cleaned.startswith(prefix) and len(cleaned) > len(prefix):
             cleaned = cleaned[len(prefix):].strip()

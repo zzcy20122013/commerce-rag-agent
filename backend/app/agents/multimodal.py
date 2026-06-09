@@ -118,7 +118,7 @@ def _multimodal_reasons(
     if relaxed_visual_terms:
         reasons = ["文本约束匹配"]
     if vision_result.enabled and vision_result.attributes.category:
-        reasons.append(f"VLM识别：{vision_result.attributes.category}")
+        reasons.append(f"图片判断：{vision_result.attributes.category}")
     budget = constraints.get("budget_max")
     if budget and product.price <= budget:
         reasons.append("价格符合")
@@ -174,8 +174,8 @@ def build_multimodal_answer(
             "下面先给你相似度更高的选择，并在卡片里标出预算情况。"
         )
     if relaxed_visual_terms:
-        return f"{visual_intro}我按价格和场景约束找到了商品，但图片外观相似度会弱一些，下面结果更偏文字条件匹配。"
-    return f"{visual_intro}我再结合你的价格和场景约束做了筛选。"
+        return f"{visual_intro}我按你补充的文字条件找到了商品，但图片外观相似度会弱一些，下面结果更偏文字条件匹配。"
+    return f"{visual_intro}{_constraint_summary_sentence(constraints)}"
 
 
 def _merge_terms(*groups: list[str]) -> list[str]:
@@ -193,14 +193,29 @@ def _build_visual_query(query: str, vision_result: VisionAnalysisResult) -> str:
     return " ".join([query, *terms]).strip()
 
 
+def _constraint_summary_sentence(constraints: dict) -> str:
+    parts: list[str] = []
+    if constraints.get("budget_max"):
+        parts.append(f"{constraints['budget_max']} 元以内")
+    use_cases = constraints.get("use_cases") or []
+    if use_cases:
+        parts.append("、".join(use_cases[:2]))
+    preferences = constraints.get("preferences") or []
+    if preferences:
+        parts.append("、".join(preferences[:2]))
+    if not parts:
+        return "下面先按外观相似度给你排个优先级。"
+    return f"我再结合{'、'.join(parts)}帮你收窄了一下。"
+
+
 def _visual_intro(vision_result: VisionAnalysisResult, visual_terms: list[str]) -> str:
     if vision_result.enabled and vision_result.attributes.category:
         details = "、".join(visual_terms[:4])
         suffix = f"，关键特征有{details}" if details else ""
-        return f"我先识别到这张图大概是{vision_result.attributes.category}{suffix}。"
+        return f"我看这张图更像是{vision_result.attributes.category}{suffix}。"
     if vision_result.error:
-        return "我先按图片相似度做了检索，VLM 识别暂时不可用。"
-    return "我先按图片外观找相似商品。"
+        return "我先按这张图的外观帮你找相似款。"
+    return "我先根据图片外观找了相似商品。"
 
 
 def _candidate_text(item: dict) -> str:

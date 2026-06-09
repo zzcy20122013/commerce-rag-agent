@@ -1,7 +1,9 @@
 from copy import deepcopy
 from collections.abc import Callable, Iterator
+import os
+import time
 
-from app.llm.generation import ChatClient, _format_llm_error, _has_provider_key
+from app.llm.generation import ChatClient, _contains_internal_artifacts, _format_llm_error, _has_provider_key
 from app.llm.generation import generate_response_composer_result
 from app.llm.openai_compatible_client import OpenAICompatibleClient
 from app.llm.prompt_registry import build_response_composer_messages
@@ -16,7 +18,7 @@ def compose_agent_response(
     draft_answer = str(result.get("answer") or "").strip()
     if not draft_answer:
         return result
-    if str(result.get("intent", "")).strip().lower() in {"purchase_help"}:
+    if _should_preserve_answer(result):
         composed = deepcopy(result)
         composed["response_composer"] = {
             "llm_enabled": False,
@@ -87,12 +89,16 @@ def stream_response_composer_chunks(
             if not chunk:
                 continue
             answer_parts.append(chunk)
-            yield chunk
         answer = "".join(answer_parts).strip()
         if not answer:
             yield from _fallback_chunks(draft_answer)
             _complete(on_complete, answer=draft_answer, llm_enabled=False, llm_error="empty_stream_response")
             return
+        if _contains_internal_artifacts(answer):
+            yield from _fallback_chunks(draft_answer)
+            _complete(on_complete, answer=draft_answer, llm_enabled=False, llm_error="unsafe_generated_answer")
+            return
+        yield from _fallback_chunks(answer)
         _complete(on_complete, answer=answer, llm_enabled=True, llm_error=None)
     except Exception as error:
         yield from _fallback_chunks(draft_answer)
@@ -116,12 +122,22 @@ def attach_response_composer_trace(result: dict, stream_meta: dict) -> dict:
 
 
 def _should_preserve_answer(result: dict) -> bool:
-    return str(result.get("intent", "")).strip().lower() in {"purchase_help"}
+    return str(result.get("intent", "")).strip().lower() in {"purchase_help", "multimodal_search"}
 
 
 def _fallback_chunks(answer: str) -> Iterator[str]:
+    delay_seconds = _stream_chunk_delay_seconds()
     for index in range(0, len(answer), 2):
         yield answer[index:index + 2]
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+
+
+def _stream_chunk_delay_seconds() -> float:
+    try:
+        return max(float(os.getenv("SSE_CHUNK_DELAY_SECONDS", "0")), 0.0)
+    except ValueError:
+        return 0.0
 
 
 def _complete(

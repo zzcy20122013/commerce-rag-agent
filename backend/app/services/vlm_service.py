@@ -49,8 +49,8 @@ class VisionLanguageService:
         self.client = client
 
     def analyze_image(self, image_path: str, *, query: str = "") -> VisionAnalysisResult:
-        if self.client is None and not _has_vision_key():
-            return VisionAnalysisResult(enabled=False, error="missing_api_key")
+        if self.client is None and not _has_vision_config():
+            return VisionAnalysisResult(enabled=False, error="missing_vision_config")
         try:
             client = self.client or _build_vision_client()
             content = client.chat_sync(
@@ -58,7 +58,7 @@ class VisionLanguageService:
                 temperature=0.1,
             )
             return VisionAnalysisResult(enabled=True, attributes=parse_visual_attributes(content))
-        except Exception as error:
+        except BaseException as error:
             return VisionAnalysisResult(enabled=False, error=_short_error(error))
 
 
@@ -134,12 +134,25 @@ def _build_vision_client() -> OpenAICompatibleClient:
     return OpenAICompatibleClient(
         api_key=os.getenv("DOUBAO_VISION_API_KEY") or os.getenv("DOUBAO_API_KEY") or os.getenv("ARK_API_KEY", ""),
         base_url=os.getenv("DOUBAO_VISION_BASE_URL") or os.getenv("DOUBAO_BASE_URL"),
-        model=os.getenv("DOUBAO_VISION_MODEL") or os.getenv("DOUBAO_MODEL"),
+        model=_vision_model_name(),
+        timeout=float(os.getenv("VLM_TIMEOUT_SECONDS", "10")),
     )
 
 
-def _has_vision_key() -> bool:
-    return bool(os.getenv("DOUBAO_VISION_API_KEY") or os.getenv("DOUBAO_API_KEY") or os.getenv("ARK_API_KEY"))
+def _has_vision_config() -> bool:
+    return bool(
+        (os.getenv("DOUBAO_VISION_API_KEY") or os.getenv("DOUBAO_API_KEY") or os.getenv("ARK_API_KEY"))
+        and _vision_model_name()
+    )
+
+
+def _vision_model_name() -> str:
+    explicit_model = os.getenv("DOUBAO_VISION_MODEL")
+    if explicit_model:
+        return explicit_model
+    if os.getenv("DOUBAO_VISION_REUSE_TEXT_MODEL", "").strip().lower() in {"1", "true", "yes"}:
+        return os.getenv("DOUBAO_MODEL", "")
+    return ""
 
 
 def _image_data_url(image_path: str) -> str:

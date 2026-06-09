@@ -1,5 +1,5 @@
 from app.agents.response_composer import compose_agent_response, stream_response_composer_chunks
-from app.llm.generation import _format_llm_error
+from app.llm.generation import _format_llm_error, generate_response_composer_result
 from app.llm.prompt_registry import build_response_composer_messages
 import httpx
 
@@ -88,6 +88,52 @@ def test_response_composer_does_not_rewrite_purchase_cart_actions() -> None:
     assert client.messages == []
 
 
+def test_response_composer_does_not_rewrite_multimodal_search_answers() -> None:
+    client = FakeChatClient("我又写出了 VLM。")
+    result = {
+        "intent": "multimodal_search",
+        "answer": "这张图的细节不算特别清楚，我先按外观相近的方向帮你找。",
+        "memory": {},
+        "product_cards": [{"product_id": "p1", "title": "缓震跑鞋", "price": 899}],
+        "retrieved_items": [],
+        "trace": [{"node": "multimodal_search"}],
+    }
+
+    composed = compose_agent_response(query="找类似的鞋", result=result, client=client)
+    completed = {}
+    chunks = list(stream_response_composer_chunks(query="找类似的鞋", result=result, client=client, on_complete=completed.update))
+
+    assert composed["answer"] == result["answer"]
+    assert "".join(chunks) == result["answer"]
+    assert composed["response_composer"]["llm_enabled"] is False
+    assert completed["llm_enabled"] is False
+    assert client.messages == []
+
+
+def test_response_composer_falls_back_when_llm_leaks_internal_fields() -> None:
+    client = FakeChatClient(
+        "OPPO Find X9 Ultra 的核心信息如下：价格 6999 元。\n\n"
+        "参数：sub_category: 智能手机, sku_count: 4, sku_options: ['12GB+256GB 标准版']。\n"
+        "知识库补充：商品ID: p_digital_015，review_summary: {'negative_review_count': 2}。"
+    )
+    fallback = "您可以优先看 OPPO Find X9 Ultra，价格 6999 元。它拍照和续航都比较强，但屏幕偏大。"
+
+    result = generate_response_composer_result(
+        query="有没有便宜一点的，最好拍照好、续航久，不要太大屏",
+        intent="shopping_guide",
+        draft_answer=fallback,
+        memory={"budget_max": 8000},
+        product_cards=[],
+        retrieved_items=[],
+        fallback=fallback,
+        client=client,
+    )
+
+    assert result.content == fallback
+    assert result.llm_enabled is False
+    assert result.llm_error == "unsafe_generated_answer"
+
+
 def test_response_composer_prompt_keeps_guide_decision_rules() -> None:
     messages = build_response_composer_messages(
         query="300以内通勤鞋，有没有更稳的",
@@ -121,7 +167,7 @@ def test_response_composer_streams_llm_chunks_and_reports_metadata() -> None:
 
     chunks = list(stream_response_composer_chunks(query="推荐通勤鞋", result=result, client=client, on_complete=completed.update))
 
-    assert chunks == ["主推", "第一款"]
+    assert "".join(chunks) == "主推第一款"
     assert completed["answer"] == "主推第一款"
     assert completed["llm_enabled"] is True
     assert completed["llm_error"] is None
@@ -146,6 +192,32 @@ def test_response_composer_stream_falls_back_when_streaming_fails() -> None:
     assert completed["answer"] == "我会先看第一款。"
     assert completed["llm_enabled"] is False
     assert "stream timeout" in completed["llm_error"]
+
+
+def test_response_composer_stream_falls_back_when_chunks_leak_internal_fields() -> None:
+    client = FakeStreamClient(
+        [
+            "OPPO Find X9 Ultra 的核心信息如下：",
+            "参数：sub_category: 智能手机, sku_options: ['12GB+256GB']。",
+            "知识库补充：商品ID: p_digital_015。",
+        ]
+    )
+    completed = {}
+    result = {
+        "intent": "shopping_guide",
+        "answer": "您可以优先看 OPPO Find X9 Ultra，价格 6999 元。它拍照和续航都比较强，但屏幕偏大。",
+        "memory": {},
+        "product_cards": [],
+        "retrieved_items": [],
+        "trace": [],
+    }
+
+    chunks = list(stream_response_composer_chunks(query="推荐手机", result=result, client=client, on_complete=completed.update))
+
+    assert "".join(chunks) == result["answer"]
+    assert completed["answer"] == result["answer"]
+    assert completed["llm_enabled"] is False
+    assert completed["llm_error"] == "unsafe_generated_answer"
 
 
 def test_llm_error_format_does_not_read_unconsumed_stream_response() -> None:

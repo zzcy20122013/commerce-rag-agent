@@ -189,6 +189,29 @@ def test_durability_followup_adds_preference_without_losing_context() -> None:
     assert "耐穿" in memory["preferences"]
 
 
+def test_food_refinement_followup_keeps_drink_context_and_adds_preferences() -> None:
+    result = classify_intent("我要给家里孩子早餐喝，最好常温保存，别太甜")
+
+    assert result.intent in {"clarification", "shopping_guide"}
+
+    memory = merge_memory(
+        {
+            "category": "食品饮料",
+            "subcategory": "饮品",
+            "last_product_ids": ["p_food_milk_001"],
+        },
+        result.constraints.model_dump(),
+        "我要给家里孩子早餐喝，最好常温保存，别太甜",
+    )
+
+    assert memory["category"] == "食品饮料"
+    assert memory["subcategory"] == "饮品"
+    assert "早餐" in memory["use_cases"]
+    assert "儿童" in memory["preferences"]
+    assert "常温保存" in memory["preferences"]
+    assert "低糖" in memory["preferences"]
+
+
 def test_shopping_trace_exposes_effective_constraints_and_memory_snapshot(monkeypatch) -> None:
     def fake_retrieve(db, candidates, memory, query):
         return candidates, {"retrieval_mode": "fake", "sqlite_candidates": len(candidates), "chroma_hits": []}
@@ -334,6 +357,76 @@ def test_no_exact_budget_match_limits_over_budget_cards(monkeypatch) -> None:
         assert len(result["product_cards"]) == 2
         assert captured_cards == result["product_cards"]
         assert all(card["price"] > 300 for card in result["product_cards"])
+    finally:
+        db.close()
+
+
+def test_followup_infers_subcategory_from_last_recommendation(monkeypatch) -> None:
+    def fake_retrieve(db, candidates, memory, query):
+        return candidates, {"retrieval_mode": "fake", "sqlite_candidates": len(candidates), "chroma_hits": []}
+
+    monkeypatch.setattr("app.agents.shopping_guide.hybrid_retrieve_and_rerank", fake_retrieve)
+
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSession = sessionmaker(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    db = TestingSession()
+    try:
+        db.add_all(
+            [
+                Product(
+                    id="p_phone_001",
+                    title="OPPO Find X9 Ultra 旗舰影像长续航5G智能手机",
+                    category="数码电子",
+                    brand="OPPO",
+                    price=6999,
+                    description="拍照好，长续航。",
+                    specs_json="{}",
+                    rating=4.2,
+                    sales=1200,
+                    stock=10,
+                    image_url="",
+                ),
+                Product(
+                    id="p_phone_002",
+                    title="Apple iPhone 17 Pro 6.3英寸 A19 Pro 256GB 全网通旗舰手机",
+                    category="数码电子",
+                    brand="Apple",
+                    price=8999,
+                    description="拍照稳定，续航不错，机身尺寸适中。",
+                    specs_json="{}",
+                    rating=4.4,
+                    sales=1000,
+                    stock=10,
+                    image_url="",
+                ),
+                Product(
+                    id="p_laptop_001",
+                    title="联想 ThinkPad X1 Carbon 高端商务轻薄本",
+                    category="数码电子",
+                    brand="联想",
+                    price=10999,
+                    description="高端商务笔记本，长续航。",
+                    specs_json="{}",
+                    rating=4.6,
+                    sales=1300,
+                    stock=10,
+                    image_url="",
+                ),
+            ]
+        )
+        db.commit()
+
+        result = shopping_guide_node(db)(
+            {
+                "query": "有没有便宜一点的，最好拍照好、续航久，不要太大屏",
+                "memory": {"category": "数码电子", "last_product_ids": ["p_phone_001"]},
+                "trace": [],
+            }
+        )
+
+        assert result["memory"]["subcategory"] == "手机"
+        assert [card["product_id"] for card in result["product_cards"]] == ["p_phone_002"]
     finally:
         db.close()
 

@@ -158,6 +158,8 @@ def _generate_result(
         answer = resolved_client.chat_sync(messages, temperature=0.2).strip()
         if not answer:
             return GenerationResult(content=fallback, llm_enabled=False, llm_error="empty_response")
+        if _contains_internal_artifacts(answer):
+            return GenerationResult(content=fallback, llm_enabled=False, llm_error="unsafe_generated_answer")
         return GenerationResult(content=answer, llm_enabled=True)
     except Exception as error:
         return GenerationResult(content=fallback, llm_enabled=False, llm_error=_format_llm_error(error))
@@ -179,3 +181,23 @@ def _format_llm_error(error: Exception) -> str:
             body = "<stream response body not read>"
         return f"http_{error.response.status_code}: {body}"
     return f"{type(error).__name__}: {str(error)[:500]}"
+
+
+def _contains_internal_artifacts(answer: str) -> bool:
+    text = answer or ""
+    internal_markers = [
+        "sku_",
+        "review_summary",
+        "negative_review_count",
+        "negative_keywords",
+        "商品ID",
+        "知识库补充",
+        "相关标签",
+        "检索结果",
+        "候选商品",
+        "结构化字段",
+        "数据库",
+    ]
+    if any(marker in text for marker in internal_markers):
+        return True
+    return bool("参数" in text and any(marker in text for marker in ["sub_category", "sku", "price_range", "faq_count"]))

@@ -53,11 +53,13 @@ def test_vlm_service_falls_back_when_no_client_or_key(tmp_path: Path, monkeypatc
     monkeypatch.delenv("DOUBAO_VISION_API_KEY", raising=False)
     monkeypatch.delenv("DOUBAO_API_KEY", raising=False)
     monkeypatch.delenv("ARK_API_KEY", raising=False)
+    monkeypatch.delenv("DOUBAO_VISION_MODEL", raising=False)
+    monkeypatch.delenv("DOUBAO_VISION_REUSE_TEXT_MODEL", raising=False)
 
     result = VisionLanguageService().analyze_image(str(image_path), query="这是什么")
 
     assert result.enabled is False
-    assert result.error == "missing_api_key"
+    assert result.error == "missing_vision_config"
     assert result.attributes.search_terms == []
 
 

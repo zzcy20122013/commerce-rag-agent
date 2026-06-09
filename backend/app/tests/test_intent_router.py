@@ -20,6 +20,8 @@ from app.agents.intent_router import classify_intent
         ("它的屏幕参数是多少", "product_knowledge"),
         ("还有其他品牌吗", "clarification"),
         ("300 真不能超", "shopping_guide"),
+        ("有没有便宜一点的，最好拍照好、续航久，不要太大屏", "shopping_guide"),
+        ("不要太贵，也别太刺激，优先国货", "shopping_guide"),
     ],
 )
 def test_classify_intent_for_demo_phrases(query: str, expected: str) -> None:
@@ -53,3 +55,21 @@ def test_router_treats_difference_followup_as_compare() -> None:
     )
 
     assert result["intent"] == "compare"
+
+
+def test_router_keeps_beauty_refinement_followup_in_shopping_context() -> None:
+    result = router_node(
+        {
+            "query": "不要太贵，也别太刺激，优先国货",
+            "memory": {
+                "category": "美妆护肤",
+                "subcategory": "精华",
+                "budget_max": 300,
+                "preferences": ["敏感肌友好", "保湿", "修护维稳"],
+                "last_product_ids": ["p_beauty_001"],
+            },
+            "trace": [],
+        }
+    )
+
+    assert result["intent"] == "shopping_guide"

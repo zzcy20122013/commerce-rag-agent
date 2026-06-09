@@ -26,14 +26,7 @@ class UploadApi(
 ) {
     suspend fun uploadImage(resolver: ContentResolver, uri: Uri): UploadResult = withContext(Dispatchers.IO) {
         val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("无法读取图片")
-        runCatching {
-            uploadToBackend(bytes)
-        }.getOrElse {
-            UploadResult(
-                uploadId = "mock_upload_${System.currentTimeMillis()}",
-                previewUrl = uri.toString()
-            )
-        }
+        uploadToBackend(bytes, resolver.getType(uri))
     }
 
     suspend fun recognizeImageIntent(uploadId: String): ImageIntentResult = withContext(Dispatchers.IO) {
@@ -47,13 +40,14 @@ class UploadApi(
         }
     }
 
-    private fun uploadToBackend(bytes: ByteArray): UploadResult {
+    private fun uploadToBackend(bytes: ByteArray, declaredContentType: String?): UploadResult {
+        val metadata = detectUploadImageMetadata(bytes, declaredContentType)
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart(
                 "file",
-                "upload.png",
-                bytes.toRequestBody("image/png".toMediaType())
+                metadata.fileName,
+                bytes.toRequestBody(metadata.contentType.toMediaType())
             )
             .build()
         val request = Request.Builder()
@@ -85,3 +79,53 @@ class UploadApi(
         }
     }
 }
+
+data class UploadImageMetadata(
+    val fileName: String,
+    val contentType: String
+)
+
+fun detectUploadImageMetadata(bytes: ByteArray, declaredContentType: String?): UploadImageMetadata {
+    val contentType = when {
+        bytes.isJpeg() -> "image/jpeg"
+        bytes.isPng() -> "image/png"
+        bytes.isWebp() -> "image/webp"
+        declaredContentType in setOf("image/jpeg", "image/png", "image/webp") -> declaredContentType!!
+        else -> "image/jpeg"
+    }
+    val extension = when (contentType) {
+        "image/jpeg" -> "jpg"
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        else -> "jpg"
+    }
+    return UploadImageMetadata(fileName = "upload.$extension", contentType = contentType)
+}
+
+private fun ByteArray.isJpeg(): Boolean =
+    size >= 3 &&
+        this[0] == 0xFF.toByte() &&
+        this[1] == 0xD8.toByte() &&
+        this[2] == 0xFF.toByte()
+
+private fun ByteArray.isPng(): Boolean =
+    size >= 8 &&
+        this[0] == 0x89.toByte() &&
+        this[1] == 0x50.toByte() &&
+        this[2] == 0x4E.toByte() &&
+        this[3] == 0x47.toByte() &&
+        this[4] == 0x0D.toByte() &&
+        this[5] == 0x0A.toByte() &&
+        this[6] == 0x1A.toByte() &&
+        this[7] == 0x0A.toByte()
+
+private fun ByteArray.isWebp(): Boolean =
+    size >= 12 &&
+        this[0] == 0x52.toByte() &&
+        this[1] == 0x49.toByte() &&
+        this[2] == 0x46.toByte() &&
+        this[3] == 0x46.toByte() &&
+        this[8] == 0x57.toByte() &&
+        this[9] == 0x45.toByte() &&
+        this[10] == 0x42.toByte() &&
+        this[11] == 0x50.toByte()

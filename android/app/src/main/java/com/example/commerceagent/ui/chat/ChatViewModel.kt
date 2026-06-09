@@ -236,16 +236,10 @@ class ChatViewModel(
     private fun sendText(text: String) {
         if (text.isBlank() || state.value.isSending) return
         val assistantTempId = "assistant_${UUID.randomUUID().toString().take(8)}"
-        val imageUrl = state.value.previewUrl
-        _state.value = state.value.copy(
-            input = "",
-            isSending = true,
-            messages = state.value.messages + buildUserMessage(text = text, imageUrl = imageUrl) +
-                ChatMessage(id = assistantTempId, role = MessageRole.Assistant, content = "", isStreaming = true),
-            error = null
-        )
+        val pending = buildPendingSendState(state.value, text, assistantTempId)
+        _state.value = pending.state
         currentStreamJob = viewModelScope.launch {
-            repository.streamChat(text, state.value.sessionId, state.value.uploadId)
+            repository.streamChat(text, pending.sessionId, pending.uploadId)
                 .catch { error ->
                     failAssistant(assistantTempId, text, error.message ?: "网络异常，请稍后再试。")
                     currentStreamJob = null
@@ -359,6 +353,36 @@ class ChatViewModel(
         }
         _state.value = _state.value.copy(isSending = false, error = message)
     }
+}
+
+data class PendingChatSend(
+    val state: ChatUiState,
+    val sessionId: String?,
+    val uploadId: String?
+)
+
+fun buildPendingSendState(
+    current: ChatUiState,
+    text: String,
+    assistantTempId: String
+): PendingChatSend {
+    val imageUrl = current.previewUrl
+    val uploadId = current.uploadId
+    val nextState = current.copy(
+        input = "",
+        isSending = true,
+        uploadId = null,
+        previewUrl = null,
+        isRecognizingImage = false,
+        messages = current.messages + buildUserMessage(text = text, imageUrl = imageUrl) +
+            ChatMessage(id = assistantTempId, role = MessageRole.Assistant, content = "", isStreaming = true),
+        error = null
+    )
+    return PendingChatSend(
+        state = nextState,
+        sessionId = current.sessionId,
+        uploadId = uploadId
+    )
 }
 
 fun mergeVoiceTranscript(currentInput: String, transcript: String): String {

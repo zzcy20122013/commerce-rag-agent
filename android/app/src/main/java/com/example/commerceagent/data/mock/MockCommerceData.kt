@@ -132,9 +132,9 @@ object MockCommerceData {
 
     private fun buildAnswer(query: String, selected: List<MockProduct>, hasImage: Boolean): String {
         val lead = if (hasImage) {
-            "我先用本地样例数据按图片相似和文字条件帮你模拟筛了一轮。"
+            "我先按图片外观和文字条件帮你筛了一轮。"
         } else {
-            "我先用本地样例数据帮你筛一轮。"
+            "我先按你的需求帮你筛一轮。"
         }
         val primary = selected.first()
         val backup = selected.drop(1).firstOrNull()

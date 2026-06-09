@@ -11,6 +11,7 @@ from app.services.constraint_parser import product_is_excluded
 from app.services.keyword_retrieval_service import KeywordRetrievalService
 from app.services.product_service import filter_products
 from app.services.review_insight_service import build_review_insight, format_positive_review_evidence
+from app.services.taxonomy import infer_product_subcategory
 
 
 MEMORY_FIELDS = [
@@ -61,6 +62,7 @@ def shopping_guide_node(db: Session):
         query = state["query"]
         constraints = extract_shopping_constraints(query).model_dump()
         memory = merge_memory(state.get("memory", {}), constraints, query)
+        memory = infer_memory_from_last_recommendation(db, memory)
         effective_constraints = build_effective_constraints(constraints, memory)
         trace_context = build_shopping_trace_context(effective_constraints, memory)
         products = filter_products(
@@ -197,7 +199,23 @@ def shopping_guide_node(db: Session):
     return node
 
 
+def infer_memory_from_last_recommendation(db: Session, memory: dict) -> dict:
+    if memory.get("subcategory") or not memory.get("last_product_ids"):
+        return memory
+    product = db.get(Product, memory["last_product_ids"][0])
+    if not product:
+        return memory
+    inferred_subcategory = infer_product_subcategory(product)
+    inferred = dict(memory)
+    if product.category and not inferred.get("category"):
+        inferred["category"] = product.category
+    if inferred_subcategory:
+        inferred["subcategory"] = inferred_subcategory
+    return inferred
+
+
 def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
+    constraints = _normalize_followup_constraints(previous, constraints, query)
     memory = {field: previous.get(field) for field in MEMORY_FIELDS if field in previous}
     for field in MEMORY_FIELDS:
         value = constraints.get(field)
@@ -213,11 +231,11 @@ def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
     lowered = query.lower()
     if any(word in lowered for word in ["更轻", "轻一点", "轻便", "portable"]):
         _append_preference(memory, "轻便")
-    if any(word in lowered for word in ["便宜", "省钱", "划算", "cheaper"]):
+    if any(word in lowered for word in ["便宜", "省钱", "划算", "不要太贵", "别太贵", "太贵", "cheaper"]):
         _append_preference(memory, "性价比")
     if any(word in lowered for word in ["国产", "国货", "国内品牌", "国产品牌"]):
         _append_preference(memory, "国产品牌")
-    if any(word in lowered for word in ["敏感肌", "易敏肌", "温和", "无刺激"]):
+    if any(word in lowered for word in ["敏感肌", "易敏肌", "温和", "无刺激", "别太刺激", "不要太刺激", "低刺激"]):
         _append_preference(memory, "敏感肌友好")
     if any(word in lowered for word in ["修护", "维稳", "屏障"]):
         _append_preference(memory, "修护维稳")
@@ -225,6 +243,20 @@ def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
         _append_preference(memory, "保湿")
     if any(word in lowered for word in ["耐穿", "耐用", "耐磨", "结实"]):
         _append_preference(memory, "耐穿")
+    if any(word in lowered for word in ["拍照", "影像", "摄像", "相机"]):
+        _append_preference(memory, "拍照")
+    if any(word in lowered for word in ["续航", "电池", "长续航"]):
+        _append_preference(memory, "续航")
+    if any(word in lowered for word in ["不要太大屏", "别太大屏", "不要大屏", "小屏", "轻巧"]):
+        _append_preference(memory, "小屏轻巧")
+    if any(word in lowered for word in ["孩子", "小孩", "儿童", "娃"]):
+        _append_preference(memory, "儿童")
+    if any(word in lowered for word in ["常温", "常温保存", "常温保管"]):
+        _append_preference(memory, "常温保存")
+    if any(word in lowered for word in ["别太甜", "不太甜", "不要太甜", "低糖", "少糖", "无糖", "0糖"]):
+        _append_preference(memory, "低糖")
+    if "早餐" in lowered:
+        _append_use_case(memory, "早餐")
     for color, aliases in COLOR_PREFERENCE_ALIASES.items():
         if any(alias in lowered for alias in aliases):
             _append_preference(memory, color)
@@ -233,6 +265,23 @@ def merge_memory(previous: dict, constraints: dict, query: str) -> dict:
     else:
         memory.pop("exclude_product_ids", None)
     return memory
+
+
+def _normalize_followup_constraints(previous: dict, constraints: dict, query: str) -> dict:
+    normalized = dict(constraints)
+    if _should_keep_previous_drink_subcategory(previous, normalized, query):
+        normalized.pop("subcategory", None)
+    return normalized
+
+
+def _should_keep_previous_drink_subcategory(previous: dict, constraints: dict, query: str) -> bool:
+    if previous.get("category") != "食品饮料" or previous.get("subcategory") != "饮品":
+        return False
+    if constraints.get("category") != "食品饮料" or constraints.get("subcategory") != "早餐":
+        return False
+    lowered = query.lower()
+    refinement_words = ["喝", "饮用", "孩子", "小孩", "儿童", "常温", "保存", "别太甜", "不太甜", "低糖"]
+    return any(word in lowered for word in refinement_words)
 
 
 def build_effective_constraints(constraints: dict, memory: dict) -> dict:
@@ -748,6 +797,12 @@ def _append_preference(memory: dict, value: str) -> None:
         memory["preferences"] = preferences + [value]
 
 
+def _append_use_case(memory: dict, value: str) -> None:
+    use_cases = memory.get("use_cases", [])
+    if value not in use_cases:
+        memory["use_cases"] = use_cases + [value]
+
+
 DOMAIN_KEYWORDS = [
     "黑色",
     "白色",
@@ -786,6 +841,13 @@ DOMAIN_KEYWORDS = [
     "户外",
     "降噪",
     "续航",
+    "长续航",
+    "拍照",
+    "影像",
+    "摄像",
+    "大屏",
+    "小屏",
+    "手机",
     "轻薄",
     "便携",
     "学生",
